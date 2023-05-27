@@ -397,6 +397,9 @@ class DDPM(nn.Module):
 
 
 class DDPMUtils:
+    """
+    Utility functions for DDPM
+    """
     @staticmethod
     # TODO: what should be the default value of p?
     def dynamic_clip(A, p=0.8): 
