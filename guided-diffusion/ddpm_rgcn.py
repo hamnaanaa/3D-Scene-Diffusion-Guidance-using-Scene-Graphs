@@ -163,19 +163,19 @@ class DDPM(nn.Module):
             pred_noise = model_output
             x_start = self.predict_start_from_noise(x, t, pred_noise)
             #x_start = maybe_clip(x_start)
-            x_start = DDPMUtils.dynamic_clip(x_start, p=0.5)
+            x_start = DDPMUtils.dynamic_clip(x_start)
 
         elif self.objective == 'pred_x0':
             x_start = model_output
             #x_start = maybe_clip(x_start)
-            x_start = DDPMUtils.dynamic_clip(x_start, p=0.5)
+            x_start = DDPMUtils.dynamic_clip(x_start)
             pred_noise = self.predict_noise_from_start(x, t, x_start)
 
         elif self.objective == 'pred_v':
             v = model_output
             x_start = self.predict_start_from_v(x, t, v)
             #x_start = maybe_clip(x_start)
-            x_start = DDPMUtils.dynamic_clip(x_start, p=0.5)
+            x_start = DDPMUtils.dynamic_clip(x_start)
             pred_noise = self.predict_noise_from_start(x, t, x_start)
 
         return ModelPrediction(pred_noise, x_start) # shaping output as: ('ModelPrediction', ['pred_noise', 'pred_x_start'])
@@ -399,7 +399,7 @@ class DDPM(nn.Module):
 class DDPMUtils:
     @staticmethod
     # TODO: what should be the default value of p?
-    def dynamic_clip(A, p=0.5): 
+    def dynamic_clip(A, p=0.8): 
         s = torch.quantile(torch.flatten(torch.absolute(A), start_dim=1), p, dim=1)
         s = torch.clamp(s, max=1)
         expanded_s = s.view(A.size(dim=0), 1, 1).expand(A.shape)
