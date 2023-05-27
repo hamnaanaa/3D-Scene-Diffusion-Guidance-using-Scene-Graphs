@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class MultiHeadAttention(nn.Module):
+class ModifiedMultiheadAttention(nn.Module):
     """
     Multi-Head Attention Layer with Residual Connections and Layer Normalization followed by a linear projection.
 
@@ -13,7 +13,7 @@ class MultiHeadAttention(nn.Module):
 
     """
     def __init__(self, input_dim, target_dim, num_heads):
-        super(MultiHeadAttention, self).__init__()
+        super(ModifiedMultiheadAttention, self).__init__()
         assert input_dim % num_heads == 0, "Number of heads must be a divisor of input_dim."
 
         self.attention = nn.MultiheadAttention(input_dim, num_heads, batch_first=True)

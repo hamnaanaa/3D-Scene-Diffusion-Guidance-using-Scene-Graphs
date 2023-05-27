@@ -10,7 +10,7 @@ class TimeEmbedding(nn.Module):
     The embedding is done by using the sine and cosine functions.
     """
     
-    def __init__(self, dim): # set F as an EVEN number!
+    def __init__(self, dim): # set output dim F as an EVEN number!
         super().__init__()
         self.dim = dim
 

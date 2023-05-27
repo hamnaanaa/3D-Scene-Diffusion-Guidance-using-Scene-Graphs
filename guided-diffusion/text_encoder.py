@@ -15,12 +15,12 @@ class FastTextEncoder():
         Output: word_embedd [1, 300]
         This method encodes the word into a vector of size 300.
         """
-        return FastTextEncoder.model.get_word_vector(text).reshape(1, -1)
+        return FastTextEncoder.model.get_word_vector(word).reshape(1, -1)
     
 class Word2VecEncoder():
     """
     A wrapper for Word2Vec encoder, which is used to encode words into vectors.
-    This class is used to encode the text extracted from nodes of a scene graph into vectors, which are then used as input for the conditioning encoder network.
+    This class is used to encode the word extracted from nodes of a scene graph into vectors, which are then used as input for the conditioning encoder network.
     """
     model = api.load('word2vec-google-news-300')
     
@@ -38,9 +38,3 @@ class Word2VecEncoder():
             word_embedd = Word2VecEncoder.model['unk']
         word_embedd = word_embedd.reshape(1, -1)
         return word_embedd
-
-if __name__ == '__main__':
-    word = 'apple'
-    word_embedd = FastTextEncoder.encode(word)
-    print(word_embedd.shape)
-    print(word_embedd)

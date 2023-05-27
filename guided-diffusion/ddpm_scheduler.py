@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 
 ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
-class DDPM(nn.Module):
+class DDPMScheduler(nn.Module):
     def __init__(
         self,
         model,
@@ -26,7 +26,7 @@ class DDPM(nn.Module):
         min_snr_loss_weight = False,
         min_snr_gamma = 5
     ):
-        super().__init__()
+        super(DDPMScheduler, self).__init__()
         #assert not (type(self) == DDPM) #and model.channels != model.out_dim)
         #assert not model.random_or_learned_sinusoidal_cond
 
