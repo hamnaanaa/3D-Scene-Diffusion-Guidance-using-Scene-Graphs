@@ -3,23 +3,23 @@ import gensim.downloader as api
 
 class FastTextEncoder():
     """
-    A wrapper for FastText encoder, which is used to encode text into vectors.
+    A wrapper for FastText encoder, which is used to encode words into vectors.
     This class is used to encode the text extracted from nodes of a scene graph into vectors, which are then used as input for the conditioning encoder network.
     """
     model = fasttext.load_model('models/cc.en.300.bin')
 
     @staticmethod
-    def encode(text):
+    def encode(word):
         """
-        Input: text [str]
-        Output: text_embedd [1, 300]
-        This method encodes the text into a vector of size 300.
+        Input: word [str]
+        Output: word_embedd [1, 300]
+        This method encodes the word into a vector of size 300.
         """
         return FastTextEncoder.model.get_word_vector(text).reshape(1, -1)
     
 class Word2VecEncoder():
     """
-    A wrapper for Word2Vec encoder, which is used to encode text into vectors.
+    A wrapper for Word2Vec encoder, which is used to encode words into vectors.
     This class is used to encode the text extracted from nodes of a scene graph into vectors, which are then used as input for the conditioning encoder network.
     """
     model = api.load('word2vec-google-news-300')
@@ -28,8 +28,8 @@ class Word2VecEncoder():
     def encode(word):
         """
         Input: word (a single word) [str]
-        Output: text_embedd [1, 300]
-        This method encodes the text into a vector of size 300.
+        Output: word_embedd [1, 300]
+        This method encodes the word into a vector of size 300.
         """
         word = word.lower()
         try:
