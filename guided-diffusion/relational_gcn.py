@@ -1,10 +1,9 @@
 from torch import nn
-import torch_geometric.transforms as T
 from torch_geometric.nn import RGCNConv
 
-class EncoderRGCN(nn.Module):
+class RelationalRGCN(nn.Module):
     """
-    Encoder module using the Relational Graph Convolutional Network (RGCN) architecture.
+    Module using the Relational Graph Convolutional Network (RGCN) architecture.
 
     Args:
         in_channels (int): Number of input channels/features.
@@ -17,7 +16,7 @@ class EncoderRGCN(nn.Module):
         bias (bool, optional): If set to False, the layer will not learn an additive bias (default: True).
 
     Attributes:
-        num_layers (int): Total number of layers in the encoder.
+        num_layers (int): Total number of layers in the RGCN.
         layers (torch.nn.ModuleList): List of RGCNConv, ReLU, and Dropout layers.
 
     """
@@ -32,7 +31,7 @@ class EncoderRGCN(nn.Module):
         dp_rate=0.1, 
         bias=True
     ):
-        super(EncoderRGCN, self).__init__()
+        super(RelationalRGCN, self).__init__()
         self.num_layers = len(h_channels_list) + 1
         self.layers = []
         
@@ -67,7 +66,7 @@ class EncoderRGCN(nn.Module):
         
     def forward(self, x, edge_index, edge_type):
         """
-        Forward pass of the EncoderRGCN module.
+        Forward pass of the RelationalRGCN module.
 
         Args:
             x (torch.Tensor): Input features of shape (B, N, C) = (batch_size, num_nodes, in_channels).
