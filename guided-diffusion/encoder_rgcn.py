@@ -66,6 +66,18 @@ class EncoderRGCN(nn.Module):
         self.layers = nn.ModuleList(self.layers)
         
     def forward(self, x, edge_index, edge_type):
+        """
+        Forward pass of the EncoderRGCN module.
+
+        Args:
+            x (torch.Tensor): Input features of shape (B, N, C) = (batch_size, num_nodes, in_channels).
+            edge_index (torch.Tensor): Graph edge indices of shape (B, 2, E) = (batch_size, 2, num_edges).
+            edge_type (torch.Tensor): Edge type indices of shape (B, E) = (batch_size, num_edges).
+
+        Returns:
+            torch.Tensor: Output features of shape (B, N, H1) = (batch_size, num_nodes, out_channels).
+
+        """
         for layer in self.layers:
             if isinstance(layer, RGCNConv):
                 x = layer(x, edge_index, edge_type)
