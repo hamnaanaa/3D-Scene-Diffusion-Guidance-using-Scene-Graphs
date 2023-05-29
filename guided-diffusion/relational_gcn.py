@@ -26,8 +26,9 @@ class RelationalRGCN(nn.Module):
         h_channels_list,
         out_channels, 
         num_relations,
-        num_bases=None, 
+        num_bases=None,
         aggr='mean',
+        activation=nn.LeakyReLU(negative_slope=0.2, inplace=True), # TODO: other activation function here?
         dp_rate=0.1, 
         bias=True
     ):
@@ -47,7 +48,7 @@ class RelationalRGCN(nn.Module):
                     aggr=aggr,
                     bias=bias
                 ),
-                nn.ReLU(inplace=True),
+                activation,
                 nn.Dropout(p=dp_rate)
             ]
         self.layers += [
@@ -59,7 +60,7 @@ class RelationalRGCN(nn.Module):
                 aggr=aggr,
                 bias=bias
             ),
-            nn.ReLU(inplace=True) # TODO: other final activation function here?
+            activation
         ]
         
         self.layers = nn.ModuleList(self.layers)
