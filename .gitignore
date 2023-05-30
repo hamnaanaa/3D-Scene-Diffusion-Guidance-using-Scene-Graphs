@@ -1,4 +1,7 @@
 .vscode
 runs/*
-data/*
+datasets/3DSSG/*
+datasets/3RScan/c++
+datasets/3RScan/data
+datasets/3RScan/splits
 models/*
