@@ -290,7 +290,7 @@ class DDPMScheduler(nn.Module):
         #batch_size, N, D, channels = classes.shape[0], self.N, self.D, self.channels
         #sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
         #return sample_fn(classes, (batch_size, channels, image_size, image_size), cond_scale)
-        batch_size, N, D = obj_cond.shape[0], self.N, self.D
+        batch_size, N, D = obj_cond.shape[0] // self.N, self.N, self.D
         sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
         return sample_fn(obj_cond, edge_cond, relation_cond, (batch_size, N, D), cond_scale)
 
