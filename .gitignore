@@ -5,3 +5,4 @@ datasets/3RScan/c++
 datasets/3RScan/data
 datasets/3RScan/splits
 models/*
+*/__pycache__
