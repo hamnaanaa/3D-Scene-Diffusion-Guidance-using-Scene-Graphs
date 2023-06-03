@@ -2,6 +2,18 @@ import math
 import torch
 from torch import nn
 
+# class TimeEmbedding(nn.Module):
+#     def __init__(self, dim):
+#         super(TimeEmbedding, self).__init__()
+#         self.time_embedding = nn.Linear(1, dim)
+
+#     def forward(self, t):
+#         t = t.unsqueeze(-1)  # Add an extra dimension for broadcasting
+#         t = t.to(self.time_embedding.weight.dtype)  # Ensure input tensor matches weight tensor dtype
+#         time_embedded = self.time_embedding(t)
+#         return time_embedded
+
+
 class TimeEmbedding(nn.Module):
     """
     TimeEmbedding module for generating time-based embeddings.
@@ -18,6 +30,11 @@ class TimeEmbedding(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.dim = dim
+        self.layers = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.GELU(),
+            nn.Linear(dim, dim),
+        )
 
     def forward(self, x):
         """
@@ -45,4 +62,5 @@ class TimeEmbedding(nn.Module):
         emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
         emb = x[:, None] * emb[None, :]
         emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        emb = self.layers(emb)
         return emb
