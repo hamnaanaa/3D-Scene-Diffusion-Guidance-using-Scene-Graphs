@@ -23,26 +23,26 @@ class RelationalRGCN(nn.Module):
     def __init__(
         self, 
         in_channels,
-        h_channels_list,
+        h_channels_dims,
         out_channels, 
         num_relations,
         num_bases=None,
         aggr='mean',
-        activation=nn.LeakyReLU(negative_slope=0.2, inplace=True), # TODO: other activation function here?
+        activation=nn.LeakyReLU(negative_slope=0.2, inplace=True),
         dp_rate=0.1, 
         bias=True
     ):
         super(RelationalRGCN, self).__init__()
-        self.num_layers = len(h_channels_list) + 1
+        self.num_hidden_layers = len(h_channels_dims)
         self.layers = []
         
-        for i in range(self.num_layers - 1):
-            in_channels = in_channels if i == 0 else h_channels_list[i - 1]
-            out_channels = h_channels_list[i]
+        for i in range(self.num_hidden_layers):
+            source_channels = in_channels if i == 0 else h_channels_dims[i - 1]
+            target_channels = h_channels_dims[i]
             self.layers += [
                 RGCNConv(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
+                    in_channels=source_channels,
+                    out_channels=target_channels,
                     num_relations=num_relations,
                     num_bases=num_bases,
                     aggr=aggr,
@@ -53,7 +53,7 @@ class RelationalRGCN(nn.Module):
             ]
         self.layers += [
             RGCNConv(
-                in_channels=h_channels_list[-1] if self.num_layers > 1 else in_channels,
+                in_channels=h_channels_dims[-1] if self.num_hidden_layers > 0 else in_channels,
                 out_channels=out_channels,
                 num_relations=num_relations,
                 num_bases=num_bases,
