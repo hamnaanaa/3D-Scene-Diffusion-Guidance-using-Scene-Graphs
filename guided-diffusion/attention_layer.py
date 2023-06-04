@@ -49,6 +49,9 @@ class ModifiedMultiheadAttention(nn.Module):
         
     def forward(self, x, mask=None, return_attention=False):
         batch_size, seq_length, _ = x.size() # B, N
+        
+        device = x.device
+        
         qkv = self.qkv_proj(x)
 
         # Separate Q, K, V from linear output
@@ -65,6 +68,11 @@ class ModifiedMultiheadAttention(nn.Module):
         # Layer Normalization
         B, N, D = o.shape
         layer_norm = nn.LayerNorm([N, D])
+        
+        # Move tensors to the GPU device
+        o = o.to(device)
+        layer_norm.to(device)
+        
         o = layer_norm(o)
 
         if return_attention:
