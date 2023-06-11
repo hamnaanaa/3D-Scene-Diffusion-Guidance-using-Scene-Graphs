@@ -4,9 +4,10 @@
 runs/*
 hparam_runs/*
 
-datasets/3DSSG/*
-datasets/3RScan/c++
-datasets/3RScan/data
-datasets/3RScan/splits
+# For copyright reasons of the dataset we use, we cannot include the actual data
+datasets/data/*
+datasets/splits/*
+datasets/c++/*
+
 models/*
 */__pycache__
