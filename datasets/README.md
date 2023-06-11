@@ -2,7 +2,7 @@
 
 3RScan is a large scale, real-world dataset which features 1482 3D reconstructions / snapshots of 478 naturally changing indoor environments, designed for benchmarking emerging tasks such as long-term SLAM, scene change detection and object instance re-localization
 
-![teaser](data/img/teaser.png)
+![teaser](img/teaser.png)
 
 Each sequence comes with aligned semantically annotated 3D data and corresponding 2D frames, containing in detail:
 
