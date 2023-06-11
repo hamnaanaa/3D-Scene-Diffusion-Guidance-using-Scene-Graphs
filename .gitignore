@@ -1,5 +1,9 @@
 .vscode
+
+# Tensorboard event files
 runs/*
+hparam_runs/*
+
 datasets/3DSSG/*
 datasets/3RScan/c++
 datasets/3RScan/data
