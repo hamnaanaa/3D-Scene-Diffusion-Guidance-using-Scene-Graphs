@@ -9,5 +9,8 @@ datasets/data/*
 datasets/splits/*
 datasets/c++/*
 
+# DVIS visualizer files
+visualization/*
+
 models/*
 */__pycache__
