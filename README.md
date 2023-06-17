@@ -1,4 +1,4 @@
-# Guided 3D Scene Synthesis using Denoising Diffusion Probabilistic Models
+# Guided 3D Scene Synthesis using Denoising Diffusion Probabilistic Models with Classifier-free Guidance
 This repository implements the paper **Guided 3D Scene Synthesis using Denoising Diffusion Probabilistic Models** (tbd link)
 
 ## Setup
