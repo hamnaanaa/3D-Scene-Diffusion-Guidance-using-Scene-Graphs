@@ -30,8 +30,15 @@ class TimeEmbedding(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.dim = dim
+        
+        # Enable odd dim
+        if dim % 2 != 0:
+            dim_1 = dim-1
+        else:
+            dim_1 = dim
+            
         self.layers = nn.Sequential(
-            nn.Linear(dim, dim),
+            nn.Linear(dim_1, dim),
             nn.GELU(),
             nn.Linear(dim, dim),
         )
@@ -56,17 +63,15 @@ class TimeEmbedding(nn.Module):
             >>> embeddings = time_embedding(inputs)
         """
         device = x.device
-        dim = self.dim
-        half_dim = dim // 2
+
+        half_dim = self.dim // 2
 
         emb = math.log(10000) / (half_dim - 1)
         emb = torch.exp(torch.arange(half_dim, device=device, dtype=torch.float32) * -emb)
         emb = x[:, None] * emb[None, :]
 
-        if dim % 2 == 0:
-            emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
-        else:
-            emb = torch.cat((emb.sin(), emb.cos(), emb[:, -1].unsqueeze(-1)), dim=-1)
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+
 
         emb = self.layers(emb)
         return emb
