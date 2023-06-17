@@ -19,7 +19,7 @@ class TimeEmbedding(nn.Module):
     TimeEmbedding module for generating time-based embeddings.
 
     Args:
-        dim (int): The output dimension of the time embeddings. It should be an even number.
+        dim (int): The output dimension of the time embeddings.
 
     Example:
         >>> time_embedding = TimeEmbedding(dim=128)
@@ -49,7 +49,6 @@ class TimeEmbedding(nn.Module):
         Note:
             - The input tensor `x` needs to be of type torch.Tensor with length B.
             - The output tensor will have shape (B, dim) where dim is the specified output dimension.
-            - The specified output dimension `dim` should be an even number.
 
         Example:
             >>> time_embedding = TimeEmbedding(dim=128)
@@ -57,10 +56,17 @@ class TimeEmbedding(nn.Module):
             >>> embeddings = time_embedding(inputs)
         """
         device = x.device
-        half_dim = self.dim // 2
+        dim = self.dim
+        half_dim = dim // 2
+
         emb = math.log(10000) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
+        emb = torch.exp(torch.arange(half_dim, device=device, dtype=torch.float32) * -emb)
         emb = x[:, None] * emb[None, :]
-        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+
+        if dim % 2 == 0:
+            emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        else:
+            emb = torch.cat((emb.sin(), emb.cos(), emb[:, -1].unsqueeze(-1)), dim=-1)
+
         emb = self.layers(emb)
         return emb
