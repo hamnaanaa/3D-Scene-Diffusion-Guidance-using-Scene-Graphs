@@ -116,11 +116,11 @@ class GuidedDiffusionNetwork(nn.Module):
         is_dropping_condition = np.random.choice([True, False], p=[cond_drop_prob, 1-cond_drop_prob])
         if is_dropping_condition:
             # (1) Convert obj_cond to zeros
-            obj_cond = torch.zeros_like(obj_cond)
+            obj_cond = torch.zeros_like(obj_cond, device=x.device)
             # (2) Make edge_cond store a fully connected graph [2, B*N*N]
-            edge_cond = self._create_combination_matrix(B, N)
+            edge_cond = self._create_combination_matrix(B, N, device=x.device)
             # (3) Set all relation_cond types to 'unknown' (0) (the length now matches edge_cond)
-            relation_cond = torch.zeros_like(edge_cond[0])
+            relation_cond = torch.zeros_like(edge_cond[0], device=x.device)
 
         
         # --- Step 1: Unconditional denoising/diffusion
@@ -180,7 +180,7 @@ class GuidedDiffusionNetwork(nn.Module):
         # TODO: add rescaled_phi here?
         return scaled_loss
 
-    def _create_combination_matrix(self, B, N):
+    def _create_combination_matrix(self, B, N, device):
         """
         Create an edge connectivity combination matrix matching a fully connected graph.
         Used for classifier-free guidance when dropping the condition to avoid leaking connectivity information in the RGCN structure itself.
@@ -196,7 +196,7 @@ class GuidedDiffusionNetwork(nn.Module):
         combinations = list(itertools.product(range(N), repeat=2))
 
         # Convert combinations to a PyTorch tensor
-        combinations_tensor = torch.tensor(combinations).t()
+        combinations_tensor = torch.tensor(combinations, device=device).t()
 
         # Repeat the tensor B times along the second dimension
         repeated_combinations = combinations_tensor.repeat(1, B)
