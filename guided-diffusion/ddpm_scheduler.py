@@ -17,6 +17,7 @@ class DDPMScheduler(nn.Module):
         *,
         N,
         D,
+        range_matrix,
         timesteps = 1000,
         sampling_timesteps = None,
         loss_type = 'l1',
@@ -230,7 +231,7 @@ class DDPMScheduler(nn.Module):
         for t in tqdm(reversed(range(0, self.num_timesteps)), desc = 'sampling loop time step', total = self.num_timesteps):
             data, x_start = self.p_sample(data, t, obj_cond, edge_cond, relation_cond, cond_scale)
 
-        # data = unnormalize_to_zero_to_one(data) # NEEDED?????
+        data = DDPMUtils.unnormalize_to_original(data, self.range_matrix) 
         return data
 
     @torch.no_grad()
@@ -277,7 +278,7 @@ class DDPMScheduler(nn.Module):
                   c * pred_noise + \
                   sigma * noise
 
-        #data = unnormalize_to_zero_to_one(data) # NEEDED?????
+        data = DDPMUtils.unnormalize_to_original(data, self.range_matrix) 
         return data
 
     @torch.no_grad()
@@ -392,7 +393,7 @@ class DDPMScheduler(nn.Module):
         assert N == self.N and D == self.D
         t = torch.randint(0, self.num_timesteps, (B,), device=device).long() 
 
-        # data = normalize_to_neg_one_to_one(data) # NOT NEEDED?????
+        data = DDPMUtils.normalize_to_neg_one_to_one(data, self.range_matrix) 
         return self.p_losses(data, t, obj_cond, edge_cond, relation_cond, *args, **kwargs)
 
 
@@ -448,3 +449,48 @@ class DDPMUtils:
         alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
         betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
         return torch.clip(betas, 0, 0.999)
+    
+    @staticmethod
+    def normalize_to_neg_one_to_one(data,range_matrix):
+        '''
+        Args:
+            data: (B, 20, 315)
+            range: (2, 315) --> max, min
+
+        Returns:
+            data: (B, 20, 315)
+        ''' 
+        # Shift the data so that the min value is at 0
+        shifted_data = data - range_matrix[1]
+
+        # Normalize the data [0, 1]
+        normalized_data = shifted_data / (range_matrix[0]-range_matrix[1])
+
+        # Modify to [-1, 1]
+        modified_data = 2*normalized_data - 1
+
+        return modified_data
+    
+    @staticmethod
+    def unnormalize_to_original(data, range_matrix):
+        '''
+        Args:
+            data: (B, 20, 315)
+            range: (2, 315) --> max, min
+
+        Returns:
+            data: (B, 20, 315)
+        '''
+        # Shift the data so that the min value is at 0
+        shifted_data = data + 1
+
+        # Normalize the data [0, 1]
+        normalized_data = shifted_data / 2
+
+        # Scale data to original range
+        scaled_data = normalized_data * (range_matrix[0]-range_matrix[1])
+
+        # Shift data to original position
+        modified_data = scaled_data + range_matrix[1]
+
+        return modified_data
