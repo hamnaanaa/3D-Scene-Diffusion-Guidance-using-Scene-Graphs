@@ -36,6 +36,7 @@ class DDPMScheduler(nn.Module):
 
         self.N = N
         self.D = D
+        self.range_matrix = range_matrix
 
         self.objective = objective
 
