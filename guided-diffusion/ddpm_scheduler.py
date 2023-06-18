@@ -214,29 +214,34 @@ class DDPMScheduler(nn.Module):
         return pred_img, x_start
 
     @torch.no_grad()
-    def p_sample_loop(self, obj_cond, edge_cond, relation_cond, shape, cond_scale = 3.):
+    def p_sample_loop(self, obj_cond, edge_cond, relation_cond, shape, cond_scale = 3., return_all_samples = False):
         '''
         given an input shape: BxNxD (where B = batch size) and a graph condition (obj_cond [BxNxC], edge_cond [2xnum(edges)], relation_cond [num(edges)])
         --> creates Gaussian noise x_T of shape BxNxD
         --> for every timestep t from T to 0:
             sends x_t, t, graph_cond to 'p_sample' to get x_t-1, x_0
             sets x_t = x_t-1
-        --> outputs x_0
+        --> outputs x_0 OR all samples [(T, x_T), (T-1, x_T-1), ..., (0, x_0)] if return_all_samples == True
         '''
         batch, device = shape[0], self.betas.device
 
         data = torch.randn(shape, device=device)
 
         x_start = None
+        
+        if return_all_samples:
+            all_samples = [(self.num_timesteps, DDPMUtils.unnormalize_to_original(data, self.range_matrix))]
 
         for t in tqdm(reversed(range(0, self.num_timesteps)), desc = 'sampling loop time step', total = self.num_timesteps):
             data, x_start = self.p_sample(data, t, obj_cond, edge_cond, relation_cond, cond_scale)
+            if return_all_samples:
+                all_samples.append((t, DDPMUtils.unnormalize_to_original(data, self.range_matrix)))
 
         data = DDPMUtils.unnormalize_to_original(data, self.range_matrix) 
-        return data
+        return data if not return_all_samples else all_samples
 
     @torch.no_grad()
-    def ddim_sample(self, obj_cond, edge_cond, relation_cond, shape, cond_scale = 3., clip_denoised = True):
+    def ddim_sample(self, obj_cond, edge_cond, relation_cond, shape, cond_scale = 3., clip_denoised = True, return_all_samples = False):
         '''
         given an input shape: BxNxD (where B = batch size)
         --> creates Gaussian noise x_T of shape BxNxD
@@ -247,7 +252,8 @@ class DDPMScheduler(nn.Module):
             - get a_hat(t1) and a_hat(t2)
             - compute x_t-1 based on the DDIM sampler
             - set x_t = x_t-1
-        --> output x_0
+        --> output x_0 
+            - WARNING: TODO: implement logic for return_all_samples <- currently not used
         '''
         batch, device, total_timesteps, sampling_timesteps, eta, objective = shape[0], self.betas.device, self.num_timesteps, self.sampling_timesteps, self.ddim_sampling_eta, self.objective
 
@@ -283,18 +289,15 @@ class DDPMScheduler(nn.Module):
         return data
 
     @torch.no_grad()
-    def sample(self, obj_cond, edge_cond, relation_cond, cond_scale = 3.):
+    def sample(self, obj_cond, edge_cond, relation_cond, cond_scale = 3., return_all_samples = False):
         '''
         - gets barch size from graph_cond (obj_cond [BxNxC], edge_cond [Bx2xE], relation_cond [BxE])
         - sends the required shape BxNxD to one of the sample functions
-        - outputs x_0 [BxNxD]
+        - outputs x_0 [BxNxD] OR all samples [(T, x_T), (T-1, x_T-1), ..., (0, x_0)] if return_all_samples == True
         '''
-        #batch_size, N, D, channels = classes.shape[0], self.N, self.D, self.channels
-        #sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
-        #return sample_fn(classes, (batch_size, channels, image_size, image_size), cond_scale)
         batch_size, N, D = obj_cond.shape[0] // self.N, self.N, self.D
         sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
-        return sample_fn(obj_cond, edge_cond, relation_cond, (batch_size, N, D), cond_scale)
+        return sample_fn(obj_cond, edge_cond, relation_cond, (batch_size, N, D), cond_scale, return_all_samples = return_all_samples)
 
     @torch.no_grad()
     def interpolate(self, x1, x2, t = None, lam = 0.5):
