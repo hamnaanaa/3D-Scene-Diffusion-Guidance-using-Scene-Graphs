@@ -30,6 +30,7 @@ class DDPMScheduler(nn.Module):
         super(DDPMScheduler, self).__init__()
         #assert not (type(self) == DDPM) #and model.channels != model.out_dim)
         #assert not model.random_or_learned_sinusoidal_cond
+        self.range_matrix = range_matrix
 
         self.model = model
         #self.channels = self.model.channels
