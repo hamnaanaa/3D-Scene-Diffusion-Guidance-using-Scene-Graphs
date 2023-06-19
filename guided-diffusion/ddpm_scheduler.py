@@ -379,9 +379,17 @@ class DDPMScheduler(nn.Module):
             raise ValueError(f'unknown objective {self.objective}')
 
         loss = self.loss_fn(model_out, target, reduction = 'none')
+        # Shape: [B, 20, 315]
+        
+        # Prioritize the loss of the last 15 columns of the last axis (they describe the scene itself)
+        weight = torch.ones_like(loss)
+        weight[:, :, -15:] *= 4
+        loss = loss * weight
+        
         loss = reduce(loss, 'b ... -> b (...)', 'mean')
+        # Shape: [B, 6300]
 
-        loss = loss * DDPMUtils.extract(self.loss_weight, t, loss.shape)
+        loss = loss * DDPMUtils.extract(self.loss_weight, t, loss.shape)        
         return loss.mean()
     
     # tbd image_size
