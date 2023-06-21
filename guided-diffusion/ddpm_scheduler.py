@@ -399,7 +399,7 @@ class DDPMScheduler(nn.Module):
         t = torch.randint(0, self.num_timesteps, (B,), device=device).long() 
 
         data = DDPMUtils.normalize_to_neg_one_to_one(data, self.range_matrix) 
-        obj_cond = DDPMUtils.normalize_to_neg_one_to_one(data, self.range_matrix[:, :300]) 
+        obj_cond = DDPMUtils.normalize_to_neg_one_to_one(obj_cond, self.range_matrix[:, :300]) 
         return self.p_losses(data, t, obj_cond, edge_cond, relation_cond, *args, **kwargs)
 
 
