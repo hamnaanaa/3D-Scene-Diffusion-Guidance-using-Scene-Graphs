@@ -80,7 +80,7 @@ class GuidedDiffusionNetwork(nn.Module):
             bias=encoder_bias
         )
         
-        self.time_embedding_module = TimeEmbedding(dim=attention_out_dim+encoder_out_dim)
+        self.time_embedding_module = TimeEmbedding(dim=attention_out_dim)
         
         self.fused_rgcn_module = RelationalRGCN(
             in_channels=attention_out_dim + encoder_out_dim,
@@ -125,31 +125,30 @@ class GuidedDiffusionNetwork(nn.Module):
         
         # --- Step 1: Unconditional denoising/diffusion
         x = self.attention_module(x)
-
-
-        # --- Step 2: Scene graph processing
-        graph_output = self.encoder_module(obj_cond, edge_cond, relation_cond)
-        # Note: instead of stacking [B, N, ...], RGCN uses [B*N, ...] approach, so we need to unstack them to match the shape of x
-        graph_output = torch.stack(torch.split(graph_output, [N] * B, dim=0), dim=0)
-
-
-        # --- Step 3: Concatenation and time embedding
-        fused_output = torch.cat([x, graph_output], dim=-1)
+        
+        # --- Step 2: Inject the time embedding
         # adapt the time embedding shape ([B, F] -> [B, 1, F]) to use broadcasting when adding to fused_output [B, N, F]
         time_embedded = self.time_embedding_module(t)[:, None, :]
-        fused_output += time_embedded
+        x += time_embedded
 
 
-        # --- Step 4: Final relational GCN
+        # --- Step 3: Scene graph processing
+        graph_output = self.encoder_module(obj_cond, edge_cond, relation_cond)
+
+
+        # --- Step 4: Instead of stacking [B, N, ...], RGCN uses [B*N, ...] approach, so we need to reshape X and fuse it with the graph_output
+        x = x.view(B*N, -1)
+        fused_output = torch.cat([x, graph_output], dim=-1)
+
+        # --- Step 5: Final relational GCN
         # Note: to feed the data back to RGCN, we need to reshape the data back to [B*N, ...]
         output = self.fused_rgcn_module(
-            fused_output.view(-1, fused_output.size(-1)), 
+            fused_output,
             edge_cond, 
             relation_cond
         )
-        
 
-        # --- Step 5: Reshape the output back to [B, N, ...]
+        # --- Step 6: Reshape the output back to [B, N, ...]
         output = output.view(B, N, -1)
         return output
 
