@@ -47,6 +47,8 @@ class GuidedDiffusionNetwork(nn.Module):
             encoder_activation = nn.ReLU(inplace=True)
         elif encoder_activation == "silu":
             encoder_activation = nn.SiLU(inplace=True)
+        elif encoder_activation == "tanh":
+            encoder_activation = nn.Tanh()
         else:
             raise NotImplementedError(f"Activation function {encoder_activation} is not implemented.")
         
@@ -56,6 +58,8 @@ class GuidedDiffusionNetwork(nn.Module):
             fusion_activation = nn.ReLU(inplace=True)
         elif fusion_activation == "silu":
             fusion_activation = nn.SiLU(inplace=True)
+        elif fusion_activation == "tanh":
+            fusion_activation = nn.Tanh()
         else:
             raise NotImplementedError(f"Activation function {fusion_activation} is not implemented.")
         
