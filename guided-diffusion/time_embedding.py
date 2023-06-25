@@ -39,7 +39,7 @@ class TimeEmbedding(nn.Module):
             
         self.layers = nn.Sequential(
             nn.Linear(dim_1, dim),
-            nn.GELU(),
+            nn.Tanh(),
             nn.Linear(dim, dim),
         )
 
