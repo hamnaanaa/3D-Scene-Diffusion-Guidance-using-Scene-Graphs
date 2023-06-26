@@ -37,6 +37,7 @@ class DDPMScheduler(nn.Module):
 
         self.N = N
         self.D = D
+        self.range_matrix = range_matrix
 
         self.objective = objective
 
@@ -382,6 +383,7 @@ class DDPMScheduler(nn.Module):
         loss = reduce(loss, 'b ... -> b (...)', 'mean')
 
         loss = loss * DDPMUtils.extract(self.loss_weight, t, loss.shape)
+
         return loss.mean()
     
     # tbd image_size
@@ -396,8 +398,9 @@ class DDPMScheduler(nn.Module):
         B, N, D, device = *data.shape, data.device
         assert N == self.N and D == self.D
         t = torch.randint(0, self.num_timesteps, (B,), device=device).long() 
-
+        
         data = DDPMUtils.normalize_to_neg_one_to_one(data, self.range_matrix) 
+
         return self.p_losses(data, t, obj_cond, edge_cond, relation_cond, *args, **kwargs)
 
 
