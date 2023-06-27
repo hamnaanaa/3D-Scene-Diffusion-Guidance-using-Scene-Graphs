@@ -96,22 +96,22 @@ class GuidedDiffusionNetwork(nn.Module):
         
         # --- Step 2: Linear Layer + Activation
         x_2 = self.linear1(x_1)
-        x_2 = torch.tanh(x_2)
+        x_3 = torch.tanh(x_2)
         
         # --- Step 3: Block2
-        x_3 = self.block2(x_2, t, obj_cond, edge_cond, relation_cond) 
+        x_4 = self.block2(x_3, t, obj_cond, edge_cond, relation_cond) 
         
         # --- Step 4: Linear Layer + Activation
-        x_4 = self.linear2(x_3)
-        x_4 = torch.tanh(x_4)
+        x_5 = self.linear2(x_4)
+        x_6 = torch.tanh(x_5)
         
         # --- Step 5: Skip Connection, Block 3
-        x_4 += x_1
-        x_5 = self.block3(x_4, t, obj_cond, edge_cond, relation_cond)
+        x_7 = x_6 + x_1
+        x_8 = self.block3(x_7, t, obj_cond, edge_cond, relation_cond)
         
         # --- Step 6: Linear Layer + Activation
-        x_6 = self.linear3(x_5)
-        output = torch.tanh(x_6)
+        x_9 = self.linear3(x_8)
+        output = torch.tanh(x_9)
             
         return output
     
@@ -241,14 +241,14 @@ class GuidedDiffusionBlock(nn.Module):
         
         # --- Step 1: Injecting time and label embeddings
         time_embedded = self.time_embedding_module(t)
-        x += time_embedded.unsqueeze(1)
+        x_t = x + time_embedded.unsqueeze(1)
         obj_cond_pooled = self.max_pool(obj_cond)
-        x += obj_cond_pooled
+        x_t_text = x_t + obj_cond_pooled
         
         # --- Step 2: Relational GCN processing
-        x = x.view(B*N, -1)
+        x_t_text = x_t_text.view(B*N, -1)
         rgcn_out = self.rgc_module(
-            x,
+            x_t_text,
             edge_cond, 
             relation_cond
         )
