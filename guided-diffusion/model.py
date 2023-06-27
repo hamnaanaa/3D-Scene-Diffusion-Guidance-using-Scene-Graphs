@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from attention_layer import ModifiedMultiheadAttention
+from attention_layer import SelfMultiheadAttention
 from relational_gcn import RelationalRGCN
 from time_embedding import TimeEmbedding
 
@@ -12,7 +12,8 @@ class GuidedDiffusionNetwork(nn.Module):
     def __init__(
         self,
         # Attention block
-        attention_in_dim,
+        attention_N,
+        attention_D,
         attention_out_dim,
         attention_num_heads,
         # Common RGCN parameters
@@ -66,8 +67,9 @@ class GuidedDiffusionNetwork(nn.Module):
         # Instantiate hidden_dims tuples from the string
         encoder_hidden_dims, fusion_hidden_dims = eval(encoder_hidden_dims), eval(fusion_hidden_dims)
         
-        self.attention_module = ModifiedMultiheadAttention(
-            input_dim=attention_in_dim, 
+        self.attention_module = SelfMultiheadAttention(
+            N=attention_N,
+            D=attention_D,
             embed_dim=attention_out_dim, 
             num_heads=attention_num_heads # TODO: hyperparam vs. hardcode?
         )
@@ -89,7 +91,7 @@ class GuidedDiffusionNetwork(nn.Module):
         self.fused_rgcn_module = RelationalRGCN(
             in_channels=attention_out_dim + encoder_out_dim,
             h_channels_dims=fusion_hidden_dims,
-            out_channels=attention_in_dim,
+            out_channels=attention_D,
             num_relations=rgcn_num_relations,
             num_bases=fusion_num_bases,
             aggr=fusion_aggr,
