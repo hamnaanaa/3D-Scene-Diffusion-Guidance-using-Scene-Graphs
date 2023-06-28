@@ -92,26 +92,35 @@ class GuidedDiffusionNetwork(nn.Module):
             relation_cond = torch.zeros_like(edge_cond[0], device=x.device)
             
         # --- Step 1: Block1
-        x_1 = self.block1(x, t, obj_cond, edge_cond, relation_cond) 
+        # x_1 = self.block1(x, t, obj_cond, edge_cond, relation_cond) 
         
-        # --- Step 2: Linear Layer + Activation
-        x_2 = self.linear1(x_1)
-        x_3 = torch.tanh(x_2)
+        # # --- Step 2: Linear Layer + Activation
+        # x_2 = self.linear1(x_1)
+        # x_3 = torch.tanh(x_2)
         
-        # --- Step 3: Block2
-        x_4 = self.block2(x_3, t, obj_cond, edge_cond, relation_cond) 
+        # # --- Step 3: Block2
+        # x_4 = self.block2(x_3, t, obj_cond, edge_cond, relation_cond) 
         
-        # --- Step 4: Linear Layer + Activation
-        x_5 = self.linear2(x_4)
-        x_6 = torch.tanh(x_5)
+        # # --- Step 4: Linear Layer + Activation
+        # x_5 = self.linear2(x_4)
+        # x_6 = torch.tanh(x_5)
         
-        # --- Step 5: Skip Connection, Block 3
-        x_7 = x_6 + x_1
-        x_8 = self.block3(x_7, t, obj_cond, edge_cond, relation_cond)
+        # # --- Step 5: Skip Connection, Block 3
+        # x_7 = x_6 + x_1
+        # x_8 = self.block3(x_7, t, obj_cond, edge_cond, relation_cond)
         
-        # --- Step 6: Linear Layer + Activation
-        x_9 = self.linear3(x_8)
-        output = torch.tanh(x_9)
+        # # --- Step 6: Linear Layer + Activation
+        # x_9 = self.linear3(x_8)
+        # output = torch.tanh(x_9)
+        
+        output = self.block1(x, t, obj_cond, edge_cond, relation_cond)
+        output = self.linear1(output)
+        output = nn.Tanh()(output)
+        output = self.block2(output, t, obj_cond, edge_cond, relation_cond)
+        output = self.linear2(output)
+        output = nn.Tanh()(output)
+        output = self.block3(output, t, obj_cond, edge_cond, relation_cond)
+        output = self.linear3(output)
             
         return output
     
@@ -247,26 +256,27 @@ class GuidedDiffusionBlock(nn.Module):
         # --- Step 1: Injecting time and label embeddings
         time_embedded = self.time_embedding_module(t)
         x_t = x + time_embedded.unsqueeze(1)
-        obj_cond_pooled = self.max_pool(obj_cond)
-        x_t_text = x_t + obj_cond_pooled
+        # obj_cond_pooled = self.max_pool(obj_cond)
+        # x_t_text = x_t + obj_cond_pooled
         
-        # --- Step 2: Relational GCN processing
-        x_t_text = x_t_text.view(B*N, -1)
-        rgcn_out = self.rgc_module(
-            x_t_text,
-            edge_cond, 
-            relation_cond
-        )
-        rgcn_out = rgcn_out.view(B, N, -1)
+        # # --- Step 2: Relational GCN processing
+        # x_t_text = x_t_text.view(B*N, -1)
+        # x = x.view(B*N, -1)
+        # rgcn_out = self.rgc_module(
+        #     x,
+        #     edge_cond, 
+        #     relation_cond
+        # )
+        # rgcn_out = rgcn_out.view(B, N, -1)
         
         # --- Step 3a: Self-Attention
-        self_out = self.self_attention_module(rgcn_out)
+        # self_out = self.self_attention_module(rgcn_out)
         
-        # --- Step 3b: Cross-Attention
-        cross_out = self.cross_attention_module(rgcn_out, obj_cond)
+        # # --- Step 3b: Cross-Attention
+        # cross_out = self.cross_attention_module(rgcn_out, obj_cond)
         
-        # --- Step 4: Sum up Parallel Attention Paths
-        output = self_out + cross_out
+        # # --- Step 4: Sum up Parallel Attention Paths
+        # output = self_out + cross_out
         
-        return output
+        return x_t
         

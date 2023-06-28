@@ -331,6 +331,7 @@ class DDPMScheduler(nn.Module):
         noise = DDPMUtils.default(noise, lambda: torch.randn_like(x_start))
 
         return (
+            # x_start + noise
             DDPMUtils.extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
             DDPMUtils.extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
@@ -362,7 +363,6 @@ class DDPMScheduler(nn.Module):
         noise = DDPMUtils.default(noise, lambda: torch.randn_like(x_start))
 
         # noise sample
-
         x = self.q_sample(x_start = x_start, t = t, noise = noise)
 
         # predict and take gradient step
@@ -381,13 +381,12 @@ class DDPMScheduler(nn.Module):
 
         loss = self.loss_fn(model_out, target, reduction = 'none')
         loss = reduce(loss, 'b ... -> b (...)', 'mean')
-
         loss = loss * DDPMUtils.extract(self.loss_weight, t, loss.shape)
 
         return loss.mean()
     
     # tbd image_size
-    def forward(self, data, obj_cond, edge_cond, relation_cond, *args, **kwargs):
+    def forward(self, data, obj_cond, edge_cond, relation_cond, noise=None, *args, **kwargs):
         '''
         Given Data of shape [BxNxD]
         --> create a vector t with B random numbers between 0 and num_timesteps
@@ -401,7 +400,7 @@ class DDPMScheduler(nn.Module):
         
         data = DDPMUtils.normalize_to_neg_one_to_one(data, self.range_matrix) 
 
-        return self.p_losses(data, t, obj_cond, edge_cond, relation_cond, *args, **kwargs)
+        return self.p_losses(data, t, obj_cond, edge_cond, relation_cond, noise=noise, *args, **kwargs)
 
 
 class DDPMUtils:
