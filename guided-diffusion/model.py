@@ -205,5 +205,10 @@ class GuidedDiffusionNetwork(nn.Module):
 
         # Repeat the tensor B times along the second dimension
         repeated_combinations = combinations_tensor.repeat(1, B)
+        
+        # For every batch step i, add the offset of N*i to both rows window size of N*N
+        for i in range(1, B+1):
+            l_step, r_step = N*N*i, N*N*(i+1)
+            repeated_combinations[:, l_step:r_step] += N*i
 
         return repeated_combinations
