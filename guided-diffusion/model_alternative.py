@@ -30,7 +30,7 @@ class GuidedDiffusionNetwork(nn.Module):
         )
         
         self.linear1 = nn.Linear(
-            in_features=layer_1_dim,
+            in_features=layer_2_dim,
             out_features=layer_2_dim
         )
             
@@ -43,7 +43,7 @@ class GuidedDiffusionNetwork(nn.Module):
         
         self.linear2 = nn.Linear(
             in_features=layer_2_dim,
-            out_features=layer_1_dim
+            out_features=layer_2_dim
         )
             
         self.block3 = GuidedDiffusionBlock(
@@ -54,13 +54,19 @@ class GuidedDiffusionNetwork(nn.Module):
 
         )
         
+        
         self.linear3 = nn.Linear(
-            in_features=layer_1_dim,
+            in_features=layer_2_dim,
+            out_features=layer_2_dim
+        )
+        
+        self.linear4 = nn.Linear(
+            in_features=layer_2_dim,
             out_features=layer_1_dim
         )
         
         assert general_params["obj_cond_dim"] % layer_1_dim == 0, "Layer 1 dim needs to be a divisor of obj cond dim"
-        assert general_params["obj_cond_dim"] % layer_2_dim == 0, "Layer 2 dim needs to be a divisor of obj cond dim"
+        #assert general_params["obj_cond_dim"] % layer_2_dim == 0, "Layer 2 dim needs to be a divisor of obj cond dim"
         
     def forward(self, x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=None):
         """
@@ -113,14 +119,18 @@ class GuidedDiffusionNetwork(nn.Module):
         # x_9 = self.linear3(x_8)
         # output = torch.tanh(x_9)
         
-        output = self.block1(x, t, obj_cond, edge_cond, relation_cond)
-        output = self.linear1(output)
-        output = nn.Tanh()(output)
-        output = self.block2(output, t, obj_cond, edge_cond, relation_cond)
-        output = self.linear2(output)
-        output = nn.Tanh()(output)
-        output = self.block3(output, t, obj_cond, edge_cond, relation_cond)
-        output = self.linear3(output)
+        output1 = self.block1(x, t, obj_cond, edge_cond, relation_cond)
+        output1 = self.linear1(output1)
+        output1 = nn.Tanh()(output1)
+        
+        output2 = self.linear2(output1)
+        output2 = nn.Tanh()(output2)
+   
+        output3 = self.linear3(output2)
+        output3 = nn.Tanh()(output3)
+        
+        output4 = output1 + output3
+        output = self.linear4(output4)
             
         return output
     
@@ -205,7 +215,7 @@ class GuidedDiffusionBlock(nn.Module):
         rgc_hidden_dims = eval(rgc_params["rgc_hidden_dims"])
         kernel_size = ((general_params["obj_cond_dim"]//layer_dim),)
         
-        self.time_embedding_module = TimeEmbedding(dim=layer_dim)
+        self.time_embedding_module = TimeEmbedding(dim=14) # ACHTUNG HARDCODED AKTUELL
         
         self.max_pool = nn.MaxPool1d(kernel_size=kernel_size)
         
@@ -251,11 +261,17 @@ class GuidedDiffusionBlock(nn.Module):
             torch.Tensor: Output tensor of shape [B, N, D] representing the predicted noise of the final fused relational GCN.
         """
         
-        B, N, _ = x.shape
+        B, N, D = x.shape
         
         # --- Step 1: Injecting time and label embeddings
         time_embedded = self.time_embedding_module(t)
-        x_t = x + time_embedded.unsqueeze(1)
+        time_embedded = time_embedded.unsqueeze(1).expand(B, N, -1)
+        
+        #time_embedded = t.unsqueeze(1).unsqueeze(2)
+        #time_embedded = time_embedded.expand(B, N, 1)
+
+        x_t = torch.cat((x, time_embedded), dim=-1)
+        
         # obj_cond_pooled = self.max_pool(obj_cond)
         # x_t_text = x_t + obj_cond_pooled
         

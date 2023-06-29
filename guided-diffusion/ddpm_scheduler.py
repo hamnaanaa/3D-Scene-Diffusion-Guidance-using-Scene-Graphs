@@ -331,7 +331,7 @@ class DDPMScheduler(nn.Module):
         noise = DDPMUtils.default(noise, lambda: torch.randn_like(x_start))
 
         return (
-            # x_start + noise
+            #x_start + noise
             DDPMUtils.extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
             DDPMUtils.extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )

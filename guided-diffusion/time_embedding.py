@@ -37,11 +37,6 @@ class TimeEmbedding(nn.Module):
         else:
             dim_1 = dim
             
-        self.layers = nn.Sequential(
-            nn.Linear(dim_1, dim),
-            nn.Tanh(),
-            nn.Linear(dim, dim),
-        )
 
     def forward(self, x):
         """
@@ -73,6 +68,4 @@ class TimeEmbedding(nn.Module):
 
         emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
 
-
-        emb = self.layers(emb)
         return emb
