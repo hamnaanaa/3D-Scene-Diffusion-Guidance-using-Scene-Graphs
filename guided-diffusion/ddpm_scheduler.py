@@ -296,7 +296,7 @@ class DDPMScheduler(nn.Module):
         - sends the required shape BxNxD to one of the sample functions
         - outputs x_0 [BxNxD] OR all samples [(T, x_T), (T-1, x_T-1), ..., (0, x_0)] if return_all_samples == True
         '''
-        batch_size, N, D = obj_cond.shape[0] // self.N, self.N, self.D
+        batch_size, N, D = obj_cond.shape[0], self.N, self.D
         sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
         return sample_fn(obj_cond, edge_cond, relation_cond, (batch_size, N, D), cond_scale, return_all_samples = return_all_samples)
 

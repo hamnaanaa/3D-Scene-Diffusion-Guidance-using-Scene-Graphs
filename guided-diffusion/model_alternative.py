@@ -103,6 +103,7 @@ class GuidedDiffusionNetwork(nn.Module):
         is_dropping_condition = np.random.choice([True, False], p=[cond_drop_prob, 1-cond_drop_prob])
         if is_dropping_condition:
             # (1) Convert obj_cond to zeros
+            # TODO: remove me when it's clear what to do with that
             #obj_cond = torch.zeros_like(obj_cond, device=x.device)  #DOPPELACHTUNG!!!!!
             # (2) Make edge_cond store a fully connected graph [2, B*N*N]
             edge_cond = self._create_combination_matrix(B, N, device=x.device)
@@ -377,13 +378,13 @@ class GuidedDiffusionBlock(nn.Module):
         #rgcn_out = rgcn_out.view(B, N, -1)
         
         # --- Step 3a: Self-Attention
-        #self_out = self.self_attention_module(x)
+        self_out = self.self_attention_module(x)
         
         # # --- Step 3b: Cross-Attention
         cross_out = self.cross_attention_module(x, obj_cond)
         
         # # --- Step 4: Sum up Parallel Attention Paths
-        #output = self_out + cross_out
+        output = self_out + cross_out
         
-        return cross_out
+        return output
         
