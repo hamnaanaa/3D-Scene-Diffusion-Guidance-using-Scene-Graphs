@@ -26,8 +26,15 @@ class GuidedDiffusionNetwork(nn.Module):
             dim_t = 14
         )
         
+        self.rgc1 = GuidedDiffusionRGC(
+            layer_dim=layer_2_dim,
+            general_params=general_params,
+            attention_params=attention_params,
+            rgc_params=rgc_params
+        )
+        
         self.block1 = GuidedDiffusionBlock(
-            layer_dim=layer_1_dim,
+            layer_dim=layer_2_dim,
             general_params=general_params,
             attention_params=attention_params,
             rgc_params=rgc_params
@@ -38,7 +45,7 @@ class GuidedDiffusionNetwork(nn.Module):
             out_features=layer_2_dim
         )
             
-        self.block2 = GuidedDiffusionBlock(
+        self.rgc2 = GuidedDiffusionRGC(
             layer_dim=layer_2_dim,
             general_params=general_params,
             attention_params=attention_params,
@@ -50,8 +57,8 @@ class GuidedDiffusionNetwork(nn.Module):
             out_features=layer_2_dim
         )
             
-        self.block3 = GuidedDiffusionBlock(
-            layer_dim=layer_1_dim,
+        self.rgc3 = GuidedDiffusionRGC(
+            layer_dim=layer_2_dim,
             general_params=general_params,
             attention_params=attention_params,
             rgc_params=rgc_params
@@ -60,7 +67,7 @@ class GuidedDiffusionNetwork(nn.Module):
         
         
         self.linear3 = nn.Linear(
-            in_features=layer_2_dim,
+            in_features=2*layer_2_dim,
             out_features=layer_2_dim
         )
         
@@ -89,14 +96,14 @@ class GuidedDiffusionNetwork(nn.Module):
         """
         
         B, N, _ = x.shape
-        cond_drop_prob = 1
+        cond_drop_prob = 1  #AAAAAACHTUNG!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
         # --- Step 0: Classifier-free guidance logic
         cond_drop_prob = cond_drop_prob if cond_drop_prob is not None else self.cond_drop_prob
         is_dropping_condition = np.random.choice([True, False], p=[cond_drop_prob, 1-cond_drop_prob])
         if is_dropping_condition:
             # (1) Convert obj_cond to zeros
-            obj_cond = torch.zeros_like(obj_cond, device=x.device)
+            #obj_cond = torch.zeros_like(obj_cond, device=x.device)  #DOPPELACHTUNG!!!!!
             # (2) Make edge_cond store a fully connected graph [2, B*N*N]
             edge_cond = self._create_combination_matrix(B, N, device=x.device)
             # (3) Set all relation_cond types to 'unknown' (0) (the length now matches edge_cond)
@@ -128,20 +135,20 @@ class GuidedDiffusionNetwork(nn.Module):
         output1 = self.linear1(output1)
         output1 = nn.Tanh()(output1)
         
-        #output1 = self.block2(output1, t, obj_cond, edge_cond, relation_cond)
+        output2 = self.rgc1(output1, t, obj_cond, edge_cond, relation_cond)
         
-        output2 = self.linear2(output1)
-        output2 = nn.Tanh()(output2)
+        output3a = self.rgc2(output2, t, obj_cond, edge_cond, relation_cond)
         
-        #output2 = self.block2(output2, t, obj_cond, edge_cond, relation_cond)
-   
-        output3 = self.linear3(output2)
-        output3 = nn.Tanh()(output3)
+        output3 = self.block1(output3a, t, obj_cond, edge_cond, relation_cond)
         
-        #output3a = self.block2(output3, t, obj_cond, edge_cond, relation_cond)
+        output4a = torch.cat((output3, output3a), dim=-1)
+        output4a = self.linear3(output4a)
+        output4a = nn.Tanh()(output4a)
         
-        output4 = torch.cat((output3, output1), dim=-1)
-        output = self.linear4(output4)
+        output4 = self.rgc3(output4a, t, obj_cond, edge_cond, relation_cond)
+        
+        output5 = torch.cat((output4, output1), dim=-1)
+        output = self.linear4(output5)
             
         return output
     
@@ -223,7 +230,57 @@ class GuidedDiffusionTime(nn.Module):
         x_t = torch.cat((x, time_embedded), dim=-1)
         
         return x_t
-    
+
+class GuidedDiffusionRGC(nn.Module):
+    def __init__(
+        self,
+        layer_dim,
+        general_params,
+        attention_params,
+        rgc_params
+    ):
+        super(GuidedDiffusionRGC, self).__init__()
+        
+        # Instantiate the activation functions from the string
+        if rgc_params["rgc_activation"] == "tanh":
+            rgc_activation = nn.Tanh()
+        elif rgc_params["rgc_activation"] == "leakyrelu":
+            rgc_activation = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        elif rgc_params["rgc_activation"] == "relu":
+            rgc_activation = nn.ReLU(inplace=True)
+        elif rgc_params["rgc_activation"] == "silu":
+            rgc_activation = nn.SiLU(inplace=True)
+        else:
+            raise NotImplementedError(f"Activation function {rgc_activation} is not implemented.")
+            
+        # Instantiate hidden_dims tuples from the string
+        rgc_hidden_dims = eval(rgc_params["rgc_hidden_dims"])
+        
+        self.rgc_module = RelationalRGCN(
+            in_channels=layer_dim, 
+            h_channels_dims=rgc_hidden_dims,
+            out_channels=layer_dim,
+            num_relations=rgc_params["rgc_num_relations"], 
+            num_bases=rgc_params["rgc_num_bases"],  
+            aggr=rgc_params["rgc_aggr"],
+            activation=rgc_activation,
+            dp_rate=rgc_params["rgc_dp_rate"],
+            bias=rgc_params["rgc_bias"],
+        )
+        
+    def forward(self, x, t, obj_cond, edge_cond, relation_cond):
+        
+        B, N, D = x.shape
+        
+        x = x.view(B*N, -1)
+        rgcn_out = self.rgc_module(
+            x,
+            edge_cond, 
+            relation_cond
+        )
+        rgcn_out = rgcn_out.view(B, N, -1)
+        
+        return rgcn_out
     
 
 class GuidedDiffusionBlock(nn.Module):
@@ -320,13 +377,13 @@ class GuidedDiffusionBlock(nn.Module):
         #rgcn_out = rgcn_out.view(B, N, -1)
         
         # --- Step 3a: Self-Attention
-        self_out = self.self_attention_module(x)
+        #self_out = self.self_attention_module(x)
         
         # # --- Step 3b: Cross-Attention
-        # cross_out = self.cross_attention_module(rgcn_out, obj_cond)
+        cross_out = self.cross_attention_module(x, obj_cond)
         
         # # --- Step 4: Sum up Parallel Attention Paths
-        # output = self_out + cross_out
+        #output = self_out + cross_out
         
-        return self_out
+        return cross_out
         
