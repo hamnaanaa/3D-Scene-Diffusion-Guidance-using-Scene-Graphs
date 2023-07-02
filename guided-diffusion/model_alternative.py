@@ -207,7 +207,7 @@ class GuidedDiffusionTime(nn.Module):
     ):
         super(GuidedDiffusionTime, self).__init__()
         
-        self.time_embedding_module = TimeEmbedding(dim=dim_t) # ACHTUNG HARDCODED AKTUELL
+        self.time_embedding_module = TimeEmbedding(dim=dim_t)
         
     def forward(self, x, t):
         
