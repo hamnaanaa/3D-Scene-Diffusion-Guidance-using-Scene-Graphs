@@ -79,7 +79,7 @@ class GuidedDiffusionNetwork(nn.Module):
         assert general_params["obj_cond_dim"] % layer_1_dim == 0, "Layer 1 dim needs to be a divisor of obj cond dim"
         #assert general_params["obj_cond_dim"] % layer_2_dim == 0, "Layer 2 dim needs to be a divisor of obj cond dim"
         
-    def forward(self, x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=None):
+    def forward(self, x, t, obj_cond, edge_cond_in, relation_cond_in, cond_drop_prob=None):
         """
         Forward pass of the GuidedDiffusionNetwork.
 
@@ -106,9 +106,12 @@ class GuidedDiffusionNetwork(nn.Module):
             # TODO: remove me when it's clear what to do with that
             #obj_cond = torch.zeros_like(obj_cond, device=x.device)  #DOPPELACHTUNG!!!!!
             # (2) Make edge_cond store a fully connected graph [2, B*N*N]
-            edge_cond = self._create_combination_matrix(B, N, device=x.device)
+            edge_all = self._create_combination_matrix(B, N, device=x.device)
             # (3) Set all relation_cond types to 'unknown' (0) (the length now matches edge_cond)
-            relation_cond = torch.zeros_like(edge_cond[0], device=x.device)
+            relation_all = torch.zeros_like(edge_all[0], device=x.device)
+        
+        edge_cond = torch.cat((edge_all, edge_cond_in), dim=-1)
+        relation_cond = torch.cat((relation_all, relation_cond_in), dim=-1)
             
         # --- Step 1: Block1
         # x_1 = self.block1(x, t, obj_cond, edge_cond, relation_cond) 
@@ -142,8 +145,7 @@ class GuidedDiffusionNetwork(nn.Module):
         
         output3 = self.block1(output3a, t, obj_cond, edge_cond, relation_cond)
         
-        output4a = torch.cat((output3, output3a), dim=-1)
-        output4a = self.linear3(output4a)
+        output4a = self.linear3(output3)
         output4a = nn.Tanh()(output4a)
         
         output4 = self.rgc3(output4a, t, obj_cond, edge_cond, relation_cond)
@@ -308,7 +310,7 @@ class GuidedDiffusionBlock(nn.Module):
             
         # Instantiate hidden_dims tuples from the string
         rgc_hidden_dims = eval(rgc_params["rgc_hidden_dims"])
-        kernel_size = ((general_params["obj_cond_dim"]//layer_dim),)
+        kernel_size = ((general_params["obj_cond_dim"]//25),) # HARDCODED
         
         self.time_embedding_module = TimeEmbedding(dim=14) # ACHTUNG HARDCODED AKTUELL
         
@@ -364,8 +366,8 @@ class GuidedDiffusionBlock(nn.Module):
 
         #x_t = torch.cat((x, time_embedded), dim=-1)
         
-        # obj_cond_pooled = self.max_pool(obj_cond)
-        # x_t_text = x_t + obj_cond_pooled
+        obj_cond_pooled = self.max_pool(obj_cond)
+        x_t_text = x + torch.cat((obj_cond_pooled, torch.zeros(B, N, 4)), dim=-1)
         
         # # --- Step 2: Relational GCN processing
         # x_t_text = x_t_text.view(B*N, -1)
@@ -384,7 +386,8 @@ class GuidedDiffusionBlock(nn.Module):
         cross_out = self.cross_attention_module(x, obj_cond)
         
         # # --- Step 4: Sum up Parallel Attention Paths
-        output = self_out + cross_out
+        att = self_out + cross_out
+        output = torch.cat((x_t_text, att), dim=-1)
         
         return output
         
