@@ -28,8 +28,6 @@ class GuidedDiffusionNetwork(nn.Module):
         
         self.rgc1 = GuidedDiffusionRGC(
             layer_dim=layer_2_dim,
-            general_params=general_params,
-            attention_params=attention_params,
             rgc_params=rgc_params
         )
         
@@ -47,8 +45,6 @@ class GuidedDiffusionNetwork(nn.Module):
             
         self.rgc2 = GuidedDiffusionRGC(
             layer_dim=layer_2_dim,
-            general_params=general_params,
-            attention_params=attention_params,
             rgc_params=rgc_params
         )
         
@@ -59,10 +55,7 @@ class GuidedDiffusionNetwork(nn.Module):
             
         self.rgc3 = GuidedDiffusionRGC(
             layer_dim=layer_2_dim,
-            general_params=general_params,
-            attention_params=attention_params,
             rgc_params=rgc_params
-
         )
         
         
@@ -77,7 +70,6 @@ class GuidedDiffusionNetwork(nn.Module):
         )
         
         assert general_params["obj_cond_dim"] % layer_1_dim == 0, "Layer 1 dim needs to be a divisor of obj cond dim"
-        #assert general_params["obj_cond_dim"] % layer_2_dim == 0, "Layer 2 dim needs to be a divisor of obj cond dim"
         
     def forward(self, x, t, obj_cond, edge_cond_in, relation_cond_in, cond_drop_prob=None):
         """
@@ -96,60 +88,46 @@ class GuidedDiffusionNetwork(nn.Module):
         """
         
         B, N, _ = x.shape
-        cond_drop_prob = 1  #AAAAAACHTUNG!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # TODO: remove when CFG is implemented
+        cond_drop_prob = 1
         
         # --- Step 0: Classifier-free guidance logic
         cond_drop_prob = cond_drop_prob if cond_drop_prob is not None else self.cond_drop_prob
         is_dropping_condition = np.random.choice([True, False], p=[cond_drop_prob, 1-cond_drop_prob])
         if is_dropping_condition:
             # (1) Convert obj_cond to zeros
-            # TODO: remove me when it's clear what to do with that
-            #obj_cond = torch.zeros_like(obj_cond, device=x.device)  #DOPPELACHTUNG!!!!!
+            # TODO: remove me when it's clear what to do with that with CFG
+            # obj_cond = torch.zeros_like(obj_cond, device=x.device)
             # (2) Make edge_cond store a fully connected graph [2, B*N*N]
             edge_all = self._create_combination_matrix(B, N, device=x.device)
             # (3) Set all relation_cond types to 'unknown' (0) (the length now matches edge_cond)
             relation_all = torch.zeros_like(edge_all[0], device=x.device)
         
+        
         edge_cond = torch.cat((edge_all, edge_cond_in), dim=-1)
         relation_cond = torch.cat((relation_all, relation_cond_in), dim=-1)
-            
-        # --- Step 1: Block1
-        # x_1 = self.block1(x, t, obj_cond, edge_cond, relation_cond) 
         
-        # # --- Step 2: Linear Layer + Activation
-        # x_2 = self.linear1(x_1)
-        # x_3 = torch.tanh(x_2)
-        
-        # # --- Step 3: Block2
-        # x_4 = self.block2(x_3, t, obj_cond, edge_cond, relation_cond) 
-        
-        # # --- Step 4: Linear Layer + Activation
-        # x_5 = self.linear2(x_4)
-        # x_6 = torch.tanh(x_5)
-        
-        # # --- Step 5: Skip Connection, Block 3
-        # x_7 = x_6 + x_1
-        # x_8 = self.block3(x_7, t, obj_cond, edge_cond, relation_cond)
-        
-        # # --- Step 6: Linear Layer + Activation
-        # x_9 = self.linear3(x_8)
-        # output = torch.tanh(x_9)
-        
+        # --- Step 1 - Embedding time information
         output1 = self.time(x, t)
         output1 = self.linear1(output1)
         output1 = nn.Tanh()(output1)
         
+        # --- Step 2 - Relational GCN processing to incorporate object conditions
         output2 = self.rgc1(output1, t, obj_cond, edge_cond, relation_cond)
         
         output3a = self.rgc2(output2, t, obj_cond, edge_cond, relation_cond)
         
+        # --- Step 3 - Attention mechanism
         output3 = self.block1(output3a, t, obj_cond, edge_cond, relation_cond)
         
+        # --- Step 4 - Linear layer to fuse the outputs
         output4a = self.linear3(output3)
         output4a = nn.Tanh()(output4a)
         
+        # --- Step 5 - Relational GCN processing to incorporate object conditions after attention
         output4 = self.rgc3(output4a, t, obj_cond, edge_cond, relation_cond)
         
+        # --- Step 6 - Skip connection with a linear layer to fuse the outputs
         output5 = torch.cat((output4, output1), dim=-1)
         output = self.linear4(output5)
             
@@ -226,9 +204,6 @@ class GuidedDiffusionTime(nn.Module):
         # --- Step 1: Injecting time and label embeddings
         time_embedded = self.time_embedding_module(t)
         time_embedded = time_embedded.unsqueeze(1).expand(B, N, -1)
-        
-        #time_embedded = t.unsqueeze(1).unsqueeze(2)
-        #time_embedded = time_embedded.expand(B, N, 1)
 
         x_t = torch.cat((x, time_embedded), dim=-1)
         
@@ -238,8 +213,6 @@ class GuidedDiffusionRGC(nn.Module):
     def __init__(
         self,
         layer_dim,
-        general_params,
-        attention_params,
         rgc_params
     ):
         super(GuidedDiffusionRGC, self).__init__()
@@ -310,9 +283,11 @@ class GuidedDiffusionBlock(nn.Module):
             
         # Instantiate hidden_dims tuples from the string
         rgc_hidden_dims = eval(rgc_params["rgc_hidden_dims"])
-        kernel_size = ((general_params["obj_cond_dim"]//25),) # HARDCODED
+        # TODO: remove hardcoded kernel size
+        kernel_size = ((general_params["obj_cond_dim"]//25),)
         
-        self.time_embedding_module = TimeEmbedding(dim=14) # ACHTUNG HARDCODED AKTUELL
+        # TODO: remove hardcoded time embedding dim
+        self.time_embedding_module = TimeEmbedding(dim=14)
         
         self.max_pool = nn.MaxPool1d(kernel_size=kernel_size)
         
@@ -360,32 +335,17 @@ class GuidedDiffusionBlock(nn.Module):
         
         B, N, D = x.shape
         
-        # --- Step 1: Injecting time and label embeddings
-        #time_embedded = self.time_embedding_module(t)
-        #time_embedded = time_embedded.unsqueeze(1).expand(B, N, -1)
-
-        #x_t = torch.cat((x, time_embedded), dim=-1)
-        
+        # --- Step 1 - Embedding conditional information through max pooling
         obj_cond_pooled = self.max_pool(obj_cond)
         x_t_text = x + torch.cat((obj_cond_pooled, torch.zeros(B, N, 4)), dim=-1)
         
-        # # --- Step 2: Relational GCN processing
-        # x_t_text = x_t_text.view(B*N, -1)
-        #x = x.view(B*N, -1)
-        #rgcn_out = self.rgc_module(
-        #    x,
-        #    edge_cond, 
-        #    relation_cond
-        #)
-        #rgcn_out = rgcn_out.view(B, N, -1)
-        
-        # --- Step 3a: Self-Attention
+        # --- Step 2: Self-Attention
         self_out = self.self_attention_module(x)
         
-        # # --- Step 3b: Cross-Attention
+        # --- Step 3: Cross-Attention
         cross_out = self.cross_attention_module(x, obj_cond)
         
-        # # --- Step 4: Sum up Parallel Attention Paths
+        # --- Step 4: Sum up Parallel Attention Paths
         att = self_out + cross_out
         output = torch.cat((x_t_text, att), dim=-1)
         
