@@ -162,7 +162,10 @@ class DDPMScheduler(nn.Module):
         # dynamic thresholding instead
         
 
-        if self.objective == 'pred_noise': # I assume we use this one
+        if self.objective == 'pred_noise': 
+            # TODO: Not entirely sure about 2 things
+            # 1: whether to perform clipping on pred_noise or x_start
+            # 2: effect of clipping on training
             pred_noise = model_output
             x_start = self.predict_start_from_noise(x, t, pred_noise)
             #x_start = maybe_clip(x_start)
@@ -408,11 +411,14 @@ class DDPMUtils:
     Utility functions for DDPM
     """
     @staticmethod
-    # TODO: what should be the default value of p?
-    def dynamic_clip(A, p=0.8): 
+    def dynamic_clip(A, p=0.85): 
+        # for each sample, we get one s --> s [B]
         s = torch.quantile(torch.flatten(torch.absolute(A), start_dim=1), p, dim=1)
-        s = torch.clamp(s, max=1)
+        # if s<1, it is set to 1
+        s = torch.clamp(s, min=1)
+        # expand s to match shape of A
         expanded_s = s.view(A.size(dim=0), 1, 1).expand(A.shape)
+        # clip all values within A to [-s, s], then divide by s to rescale distribution into [-1, 1]
         A_out = A.clamp(min=-expanded_s, max=expanded_s)/expanded_s
         return A_out
 

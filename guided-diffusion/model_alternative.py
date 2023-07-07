@@ -88,24 +88,25 @@ class GuidedDiffusionNetwork(nn.Module):
         """
         
         B, N, _ = x.shape
-        # TODO: remove when CFG is implemented
-        cond_drop_prob = 1
         
-        # --- Step 0: Classifier-free guidance logic
+        # --- Step 0: Define Edge and Relation Tensors 
+        
+        # --- Step 0.1: Set up fully connected part we always need
+        # (1) Make edge_cond store a fully connected graph [2, B*N*N]
+        edge_all = self._create_combination_matrix(B, N, device=x.device)
+        # (2) Set all relation_cond types to 'unknown' (0) (the length now matches edge_cond)
+        relation_all = torch.zeros_like(edge_all[0], device=x.device)
+        
+        # --- Step 0.2: Classifier-Free Guidance Logic
         cond_drop_prob = cond_drop_prob if cond_drop_prob is not None else self.cond_drop_prob
         is_dropping_condition = np.random.choice([True, False], p=[cond_drop_prob, 1-cond_drop_prob])
         if is_dropping_condition:
-            # (1) Convert obj_cond to zeros
-            # TODO: remove me when it's clear what to do with that with CFG
-            # obj_cond = torch.zeros_like(obj_cond, device=x.device)
-            # (2) Make edge_cond store a fully connected graph [2, B*N*N]
-            edge_all = self._create_combination_matrix(B, N, device=x.device)
-            # (3) Set all relation_cond types to 'unknown' (0) (the length now matches edge_cond)
-            relation_all = torch.zeros_like(edge_all[0], device=x.device)
+            edge_cond = edge_all
+            relation_cond = relation_all
+        else:
+            edge_cond = torch.cat((edge_all, edge_cond_in), dim=-1)
+            relation_cond = torch.cat((relation_all, relation_cond_in), dim=-1)
         
-        
-        edge_cond = torch.cat((edge_all, edge_cond_in), dim=-1)
-        relation_cond = torch.cat((relation_all, relation_cond_in), dim=-1)
         
         # --- Step 1 - Embedding time information
         output1 = self.time(x, t)
@@ -148,16 +149,22 @@ class GuidedDiffusionNetwork(nn.Module):
         Returns:
             torch.Tensor: Scaled loss tensor.
         """
-        cond_loss = self.forward(x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=0.)
+        # --- Step 1: Compute the prediction based on the condition
+        cond_pred = self.forward(x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=0.)
         
+        # for cond_scale = 1 we deactivate CFG --> output is simply the prediction based on condition
         if cond_scale == 1:
-            return cond_loss
+            return cond_pred
         
-        uncond_loss = self.forward(x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=1.)
+        # --- Step 2: Compute the prediction for an unconditional case
+        uncond_pred = self.forward(x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=1.)
         
-        scaled_loss = uncond_loss + (cond_loss - uncond_loss) * cond_scale
+        # --- Step 3: Move prediction into dirction of condition
+        scaled_pred = uncond_pred + (cond_pred - uncond_pred) * cond_scale
+        
         # TODO: add rescaled_phi here?
-        return scaled_loss
+        
+        return scaled_pred
     
     def _create_combination_matrix(self, B, N, device):
         """
