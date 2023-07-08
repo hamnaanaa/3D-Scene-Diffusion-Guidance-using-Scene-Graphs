@@ -23,7 +23,7 @@ class GuidedDiffusionNetwork(nn.Module):
         self.cond_drop_prob = cond_drop_prob
         
         self.time = GuidedDiffusionTime(
-            dim_t = 14
+            dim_t = general_params["time_dim"]
         )
         
         self.rgc1 = GuidedDiffusionRGC(
@@ -288,10 +288,8 @@ class GuidedDiffusionBlock(nn.Module):
         else:
             raise NotImplementedError(f"Activation function {rgc_activation} is not implemented.")
             
-        # Instantiate hidden_dims tuples from the string
-        rgc_hidden_dims = eval(rgc_params["rgc_hidden_dims"])
-        # TODO: remove hardcoded kernel size
-        kernel_size = ((general_params["obj_cond_dim"]//25),)
+        # Compute the kernel size for the max pooling layer based on layer_dim and obj_cond_dim
+        kernel_size = ((int(np.ceil(general_params["obj_cond_dim"] / layer_dim))),)
         
         self.max_pool = nn.MaxPool1d(kernel_size=kernel_size)
         
@@ -330,7 +328,7 @@ class GuidedDiffusionBlock(nn.Module):
         
         # --- Step 1 - Embedding conditional information through max pooling
         obj_cond_pooled = self.max_pool(obj_cond)
-        x_t_text = x + torch.cat((obj_cond_pooled, torch.zeros(B, N, 4)), dim=-1)
+        x_t_text = x + torch.cat((obj_cond_pooled, torch.zeros(B, N, x.shape[-1] - obj_cond_pooled.shape[-1])), dim=-1)
         
         # --- Step 2: Self-Attention
         self_out = self.self_attention_module(x)
