@@ -4,111 +4,81 @@ import torch
 import torch.nn as nn
 
 from attention_layer import SelfMultiheadAttention
+from attention_layer import CrossMultiheadAttention
 from relational_gcn import RelationalRGCN
 from time_embedding import TimeEmbedding
-
 
 class GuidedDiffusionNetwork(nn.Module):
     def __init__(
         self,
-        # Attention block
-        attention_N,
-        attention_D,
-        attention_out_dim,
-        attention_num_heads,
-        # Common RGCN parameters
-        rgcn_num_relations,
-        # Encoder RGCN block
-        encoder_in_dim, 
-        encoder_out_dim, 
-        encoder_hidden_dims=f"{()}",
-        encoder_num_bases=None,
-        encoder_aggr='mean',
-        encoder_activation="leakyrelu",
-        encoder_dp_rate=0.1,
-        encoder_bias=True,
-        # Fusion block
-        fusion_hidden_dims=f"{()}",
-        fusion_num_bases=None,
-        fusion_aggr='mean',
-        fusion_activation="leakyrelu",
-        fusion_dp_rate=0.1,
-        fusion_bias=True,
-        # Classifier-free guidance parameters
-        cond_drop_prob=0.2,
-    ):
+        layer_1_dim,
+        layer_2_dim,
+        general_params,
+        attention_params,
+        rgc_params,
+        cond_drop_prob
+        ):
         super(GuidedDiffusionNetwork, self).__init__()
         
         self.cond_drop_prob = cond_drop_prob
         
-        # Instantiate the activation functions from the string
-        if encoder_activation == "leakyrelu":
-            encoder_activation = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        elif encoder_activation == "relu":
-            encoder_activation = nn.ReLU(inplace=True)
-        elif encoder_activation == "silu":
-            encoder_activation = nn.SiLU(inplace=True)
-        elif encoder_activation == "tanh":
-            encoder_activation = nn.Tanh()
-        else:
-            raise NotImplementedError(f"Activation function {encoder_activation} is not implemented.")
-        
-        if fusion_activation == "leakyrelu":
-            fusion_activation = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        elif fusion_activation == "relu":
-            fusion_activation = nn.ReLU(inplace=True)
-        elif fusion_activation == "silu":
-            fusion_activation = nn.SiLU(inplace=True)
-        elif fusion_activation == "tanh":
-            fusion_activation = nn.Tanh()
-        else:
-            raise NotImplementedError(f"Activation function {fusion_activation} is not implemented.")
-        
-        # Instantiate hidden_dims tuples from the string
-        encoder_hidden_dims, fusion_hidden_dims = eval(encoder_hidden_dims), eval(fusion_hidden_dims)
-        
-        self.attention_module = SelfMultiheadAttention(
-            N=attention_N,
-            D=attention_D,
-            embed_dim=attention_out_dim, 
-            num_heads=attention_num_heads # TODO: hyperparam vs. hardcode?
+        self.time = GuidedDiffusionTime(
+            dim_t = 14
         )
         
-        self.encoder_module = RelationalRGCN(
-            in_channels=encoder_in_dim, 
-            h_channels_dims=encoder_hidden_dims,
-            out_channels=encoder_out_dim,
-            num_relations=rgcn_num_relations, 
-            num_bases=encoder_num_bases, 
-            aggr=encoder_aggr,
-            activation=encoder_activation,
-            dp_rate=encoder_dp_rate, 
-            bias=encoder_bias
+        self.rgc1 = GuidedDiffusionRGC(
+            layer_dim=layer_2_dim,
+            rgc_params=rgc_params
         )
         
-        self.time_embedding_module = TimeEmbedding(dim=attention_out_dim)
-        
-        self.fused_rgcn_module = RelationalRGCN(
-            in_channels=attention_out_dim + encoder_out_dim,
-            h_channels_dims=fusion_hidden_dims,
-            out_channels=attention_D,
-            num_relations=rgcn_num_relations,
-            num_bases=fusion_num_bases,
-            aggr=fusion_aggr,
-            activation=fusion_activation,
-            dp_rate=fusion_dp_rate,
-            bias=fusion_bias
+        self.block1 = GuidedDiffusionBlock(
+            layer_dim=layer_2_dim,
+            general_params=general_params,
+            attention_params=attention_params,
+            rgc_params=rgc_params
         )
-    
-    # This forward method should return the output prediction of noise of the final relational GCN in shape [B, N, D]
-    def forward(self, x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=None):
+        
+        self.linear1 = nn.Linear(
+            in_features=layer_2_dim,
+            out_features=layer_2_dim
+        )
+            
+        self.rgc2 = GuidedDiffusionRGC(
+            layer_dim=layer_2_dim,
+            rgc_params=rgc_params
+        )
+        
+        self.linear2 = nn.Linear(
+            in_features=layer_2_dim,
+            out_features=layer_2_dim
+        )
+            
+        self.rgc3 = GuidedDiffusionRGC(
+            layer_dim=layer_2_dim,
+            rgc_params=rgc_params
+        )
+        
+        
+        self.linear3 = nn.Linear(
+            in_features=2*layer_2_dim,
+            out_features=layer_2_dim
+        )
+        
+        self.linear4 = nn.Linear(
+            in_features=2*layer_2_dim,
+            out_features=layer_1_dim
+        )
+        
+        assert general_params["obj_cond_dim"] % layer_1_dim == 0, "Layer 1 dim needs to be a divisor of obj cond dim"
+        
+    def forward(self, x, t, obj_cond, edge_cond_in, relation_cond_in, cond_drop_prob=None):
         """
         Forward pass of the GuidedDiffusionNetwork.
 
         Args:
             x (torch.Tensor): Input tensor of shape [B, N, D] representing the initial input.
             t (torch.Tensor): Time tensor of shape [B] representing the corresponding timesteps.
-            obj_cond (torch.Tensor): Object condition tensor of shape [B*N, C] representing the object condition.
+            obj_cond (torch.Tensor): Object condition tensor of shape [B, N, C] representing the object condition.
             edge_cond (torch.Tensor): Edge condition tensor of shape [2, E] representing the edge condition.
             relation_cond (torch.Tensor): Relation condition tensor of shape [E] representing the corresponding relation type condition.
             cond_drop_prob (float, optional): Probability of dropping the classifier-free guidance. If none is provided, the default model's probability is used.
@@ -116,49 +86,54 @@ class GuidedDiffusionNetwork(nn.Module):
         Returns:
             torch.Tensor: Output tensor of shape [B, N, D] representing the predicted noise of the final fused relational GCN.
         """
+        
         B, N, _ = x.shape
-        # --- Step 0: Classifier-free guidance logic
+        
+        # --- Step 0: Define Edge and Relation Tensors 
+        
+        # --- Step 0.1: Set up fully connected part we always need
+        # (1) Make edge_cond store a fully connected graph [2, B*N*N]
+        edge_all = self._create_combination_matrix(B, N, device=x.device)
+        # (2) Set all relation_cond types to 'unknown' (0) (the length now matches edge_cond)
+        relation_all = torch.zeros_like(edge_all[0], device=x.device)
+        
+        # --- Step 0.2: Classifier-Free Guidance Logic
         cond_drop_prob = cond_drop_prob if cond_drop_prob is not None else self.cond_drop_prob
         is_dropping_condition = np.random.choice([True, False], p=[cond_drop_prob, 1-cond_drop_prob])
         if is_dropping_condition:
-            # (1) Convert obj_cond to zeros
-            obj_cond = torch.zeros_like(obj_cond, device=x.device)
-            # (2) Make edge_cond store a fully connected graph [2, B*N*N]
-            edge_cond = self._create_combination_matrix(B, N, device=x.device)
-            # (3) Set all relation_cond types to 'unknown' (0) (the length now matches edge_cond)
-            relation_cond = torch.zeros_like(edge_cond[0], device=x.device)
-
+            edge_cond = edge_all
+            relation_cond = relation_all
+        else:
+            edge_cond = torch.cat((edge_all, edge_cond_in), dim=-1)
+            relation_cond = torch.cat((relation_all, relation_cond_in), dim=-1)
         
-        # --- Step 1: Unconditional denoising/diffusion
-        x = self.attention_module(x)
         
-        # --- Step 2: Inject the time embedding
-        # adapt the time embedding shape ([B, F] -> [B, 1, F]) to use broadcasting when adding to fused_output [B, N, F]
-        time_embedded = self.time_embedding_module(t)[:, None, :]
-        x += time_embedded
-
-
-        # --- Step 3: Scene graph processing
-        graph_output = self.encoder_module(obj_cond, edge_cond, relation_cond)
-
-
-        # --- Step 4: Instead of stacking [B, N, ...], RGCN uses [B*N, ...] approach, so we need to reshape X and fuse it with the graph_output
-        x = x.view(B*N, -1)
-        fused_output = torch.cat([x, graph_output], dim=-1)
-
-        # --- Step 5: Final relational GCN
-        # Note: to feed the data back to RGCN, we need to reshape the data back to [B*N, ...]
-        output = self.fused_rgcn_module(
-            fused_output,
-            edge_cond, 
-            relation_cond
-        )
-
-        # --- Step 6: Reshape the output back to [B, N, ...]
-        output = output.view(B, N, -1)
+        # --- Step 1 - Embedding time information
+        output1 = self.time(x, t)
+        output1 = self.linear1(output1)
+        output1 = nn.Tanh()(output1)
+        
+        # --- Step 2 - Relational GCN processing to incorporate object conditions
+        output2 = self.rgc1(output1, t, obj_cond, edge_cond, relation_cond)
+        
+        output3a = self.rgc2(output2, t, obj_cond, edge_cond, relation_cond)
+        
+        # --- Step 3 - Attention mechanism
+        output3 = self.block1(output3a, t, obj_cond, edge_cond, relation_cond)
+        
+        # --- Step 4 - Linear layer to fuse the outputs
+        output4a = self.linear3(output3)
+        output4a = nn.Tanh()(output4a)
+        
+        # --- Step 5 - Relational GCN processing to incorporate object conditions after attention
+        output4 = self.rgc3(output4a, t, obj_cond, edge_cond, relation_cond)
+        
+        # --- Step 6 - Skip connection with a linear layer to fuse the outputs
+        output5 = torch.cat((output4, output1), dim=-1)
+        output = self.linear4(output5)
+            
         return output
-
-
+    
     def forward_with_cond_scale(self, x, t, obj_cond, edge_cond, relation_cond, cond_scale):
         """
         Forward pass of the GuidedDiffusionNetwork with conditional scaling.
@@ -174,17 +149,23 @@ class GuidedDiffusionNetwork(nn.Module):
         Returns:
             torch.Tensor: Scaled loss tensor.
         """
-        cond_loss = self.forward(x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=0.)
+        # --- Step 1: Compute the prediction based on the condition
+        cond_pred = self.forward(x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=0.)
         
+        # for cond_scale = 1 we deactivate CFG --> output is simply the prediction based on condition
         if cond_scale == 1:
-            return cond_loss
+            return cond_pred
         
-        uncond_loss = self.forward(x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=1.)
+        # --- Step 2: Compute the prediction for an unconditional case
+        uncond_pred = self.forward(x, t, obj_cond, edge_cond, relation_cond, cond_drop_prob=1.)
         
-        scaled_loss = uncond_loss + (cond_loss - uncond_loss) * cond_scale
+        # --- Step 3: Move prediction into dirction of condition
+        scaled_pred = uncond_pred + (cond_pred - uncond_pred) * cond_scale
+        
         # TODO: add rescaled_phi here?
-        return scaled_loss
-
+        
+        return scaled_pred
+    
     def _create_combination_matrix(self, B, N, device):
         """
         Create an edge connectivity combination matrix matching a fully connected graph.
@@ -212,3 +193,154 @@ class GuidedDiffusionNetwork(nn.Module):
             repeated_combinations[:, l_step:r_step] += N*i
 
         return repeated_combinations
+   
+
+class GuidedDiffusionTime(nn.Module):
+    def __init__(
+        self,
+        dim_t
+    ):
+        super(GuidedDiffusionTime, self).__init__()
+        
+        self.time_embedding_module = TimeEmbedding(dim=dim_t)
+        
+    def forward(self, x, t):
+        
+        B, N, D = x.shape
+        
+        # --- Step 1: Injecting time and label embeddings
+        time_embedded = self.time_embedding_module(t)
+        time_embedded = time_embedded.unsqueeze(1).expand(B, N, -1)
+
+        x_t = torch.cat((x, time_embedded), dim=-1)
+        
+        return x_t
+
+class GuidedDiffusionRGC(nn.Module):
+    def __init__(
+        self,
+        layer_dim,
+        rgc_params
+    ):
+        super(GuidedDiffusionRGC, self).__init__()
+        
+        # Instantiate the activation functions from the string
+        if rgc_params["rgc_activation"] == "tanh":
+            rgc_activation = nn.Tanh()
+        elif rgc_params["rgc_activation"] == "leakyrelu":
+            rgc_activation = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        elif rgc_params["rgc_activation"] == "relu":
+            rgc_activation = nn.ReLU(inplace=True)
+        elif rgc_params["rgc_activation"] == "silu":
+            rgc_activation = nn.SiLU(inplace=True)
+        else:
+            raise NotImplementedError(f"Activation function {rgc_activation} is not implemented.")
+            
+        # Instantiate hidden_dims tuples from the string
+        rgc_hidden_dims = eval(rgc_params["rgc_hidden_dims"])
+        
+        self.rgc_module = RelationalRGCN(
+            in_channels=layer_dim, 
+            h_channels_dims=rgc_hidden_dims,
+            out_channels=layer_dim,
+            num_relations=rgc_params["rgc_num_relations"], 
+            num_bases=rgc_params["rgc_num_bases"],  
+            aggr=rgc_params["rgc_aggr"],
+            activation=rgc_activation,
+            dp_rate=rgc_params["rgc_dp_rate"],
+            bias=rgc_params["rgc_bias"],
+        )
+        
+    def forward(self, x, t, obj_cond, edge_cond, relation_cond):
+        
+        B, N, D = x.shape
+        
+        x = x.view(B*N, -1)
+        rgcn_out = self.rgc_module(
+            x,
+            edge_cond, 
+            relation_cond
+        )
+        rgcn_out = rgcn_out.view(B, N, -1)
+        
+        return rgcn_out
+    
+
+class GuidedDiffusionBlock(nn.Module):
+    def __init__(
+        self,
+        layer_dim,
+        general_params,
+        attention_params,
+        rgc_params
+    ):
+        super(GuidedDiffusionBlock, self).__init__()
+        
+        # Instantiate the activation functions from the string
+        if rgc_params["rgc_activation"] == "tanh":
+            rgc_activation = nn.Tanh()
+        elif rgc_params["rgc_activation"] == "leakyrelu":
+            rgc_activation = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        elif rgc_params["rgc_activation"] == "relu":
+            rgc_activation = nn.ReLU(inplace=True)
+        elif rgc_params["rgc_activation"] == "silu":
+            rgc_activation = nn.SiLU(inplace=True)
+        else:
+            raise NotImplementedError(f"Activation function {rgc_activation} is not implemented.")
+            
+        # Instantiate hidden_dims tuples from the string
+        rgc_hidden_dims = eval(rgc_params["rgc_hidden_dims"])
+        # TODO: remove hardcoded kernel size
+        kernel_size = ((general_params["obj_cond_dim"]//25),)
+        
+        self.max_pool = nn.MaxPool1d(kernel_size=kernel_size)
+        
+        self.self_attention_module = SelfMultiheadAttention(
+            N=general_params["num_obj"], 
+            D=layer_dim, 
+            embed_dim=attention_params["attention_self_head_dim"]*attention_params["attention_num_heads"], 
+            num_heads=attention_params["attention_num_heads"]
+        )
+        
+        self.cross_attention_module = CrossMultiheadAttention(
+            N=general_params["num_obj"], 
+            D=layer_dim, 
+            C=general_params["obj_cond_dim"], 
+            embed_dim=attention_params["attention_cross_head_dim"]*attention_params["attention_num_heads"], 
+            num_heads=attention_params["attention_num_heads"]
+        )
+
+        
+    def forward(self, x, t, obj_cond, edge_cond, relation_cond):
+        """
+        Forward pass of one Guided Diffusion Block
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [B, N, D] representing the initial input.
+            t (torch.Tensor): Time tensor of shape [B] representing the corresponding timesteps.
+            obj_cond (torch.Tensor): Object condition tensor of shape [B, N, C] representing the object condition.
+            edge_cond (torch.Tensor): Edge condition tensor of shape [2, E] representing the edge condition.
+            relation_cond (torch.Tensor): Relation condition tensor of shape [E] representing the corresponding relation type condition.
+
+        Returns:
+            torch.Tensor: Output tensor of shape [B, N, D] representing the predicted noise of the final fused relational GCN.
+        """
+        
+        B, N, D = x.shape
+        
+        # --- Step 1 - Embedding conditional information through max pooling
+        obj_cond_pooled = self.max_pool(obj_cond)
+        x_t_text = x + torch.cat((obj_cond_pooled, torch.zeros(B, N, 4)), dim=-1)
+        
+        # --- Step 2: Self-Attention
+        self_out = self.self_attention_module(x)
+        
+        # --- Step 3: Cross-Attention
+        cross_out = self.cross_attention_module(x, obj_cond)
+        
+        # --- Step 4: Sum up Parallel Attention Paths
+        att = self_out + cross_out
+        output = torch.cat((x_t_text, att), dim=-1)
+        
+        return output
+        
