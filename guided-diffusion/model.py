@@ -119,7 +119,7 @@ class GuidedDiffusionNetwork(nn.Module):
         output3a = self.rgc2(output2, t, obj_cond, edge_cond, relation_cond)
         
         # --- Step 3 - Attention mechanism
-        output3 = self.block1(output3a, t, obj_cond, edge_cond, relation_cond)
+        output3 = self.block1(output3a, obj_cond)
         
         # --- Step 4 - Linear layer to fuse the outputs
         output4a = self.linear3(output3)
@@ -309,7 +309,7 @@ class GuidedDiffusionBlock(nn.Module):
         )
 
         
-    def forward(self, x, t, obj_cond, edge_cond, relation_cond):
+    def forward(self, x, obj_cond):
         """
         Forward pass of one Guided Diffusion Block
 
