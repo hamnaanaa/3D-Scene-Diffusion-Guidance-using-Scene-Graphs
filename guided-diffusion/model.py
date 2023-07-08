@@ -11,8 +11,6 @@ from time_embedding import TimeEmbedding
 class GuidedDiffusionNetwork(nn.Module):
     def __init__(
         self,
-        layer_1_dim,
-        layer_2_dim,
         general_params,
         attention_params,
         rgc_params,
@@ -27,49 +25,49 @@ class GuidedDiffusionNetwork(nn.Module):
         )
         
         self.rgc1 = GuidedDiffusionRGC(
-            layer_dim=layer_2_dim,
+            layer_dim=general_params['layer_2_dim'],
             rgc_params=rgc_params
         )
         
         self.block1 = GuidedDiffusionBlock(
-            layer_dim=layer_2_dim,
+            layer_dim=general_params['layer_2_dim'],
             general_params=general_params,
             attention_params=attention_params,
             rgc_params=rgc_params
         )
         
         self.linear1 = nn.Linear(
-            in_features=layer_2_dim,
-            out_features=layer_2_dim
+            in_features=general_params['layer_2_dim'],
+            out_features=general_params['layer_2_dim']
         )
             
         self.rgc2 = GuidedDiffusionRGC(
-            layer_dim=layer_2_dim,
+            layer_dim=general_params['layer_2_dim'],
             rgc_params=rgc_params
         )
         
         self.linear2 = nn.Linear(
-            in_features=layer_2_dim,
-            out_features=layer_2_dim
+            in_features=general_params['layer_2_dim'],
+            out_features=general_params['layer_2_dim']
         )
             
         self.rgc3 = GuidedDiffusionRGC(
-            layer_dim=layer_2_dim,
+            layer_dim=general_params['layer_2_dim'],
             rgc_params=rgc_params
         )
         
         
         self.linear3 = nn.Linear(
-            in_features=2*layer_2_dim,
-            out_features=layer_2_dim
+            in_features=2*general_params['layer_2_dim'],
+            out_features=general_params['layer_2_dim']
         )
         
         self.linear4 = nn.Linear(
-            in_features=2*layer_2_dim,
-            out_features=layer_1_dim
+            in_features=2*general_params['layer_2_dim'],
+            out_features=general_params['layer_1_dim']
         )
         
-        assert general_params["obj_cond_dim"] % layer_1_dim == 0, "Layer 1 dim needs to be a divisor of obj cond dim"
+        assert general_params["obj_cond_dim"] % general_params['layer_1_dim'] == 0, "Layer 1 dim needs to be a divisor of obj cond dim"
         
     def forward(self, x, t, obj_cond, edge_cond_in, relation_cond_in, cond_drop_prob=None):
         """
@@ -114,9 +112,9 @@ class GuidedDiffusionNetwork(nn.Module):
         output1 = nn.Tanh()(output1)
         
         # --- Step 2 - Relational GCN processing to incorporate object conditions
-        output2 = self.rgc1(output1, t, obj_cond, edge_cond, relation_cond)
+        output2 = self.rgc1(output1, edge_cond, relation_cond)
         
-        output3a = self.rgc2(output2, t, obj_cond, edge_cond, relation_cond)
+        output3a = self.rgc2(output2, edge_cond, relation_cond)
         
         # --- Step 3 - Attention mechanism
         output3 = self.block1(output3a, obj_cond)
@@ -126,7 +124,7 @@ class GuidedDiffusionNetwork(nn.Module):
         output4a = nn.Tanh()(output4a)
         
         # --- Step 5 - Relational GCN processing to incorporate object conditions after attention
-        output4 = self.rgc3(output4a, t, obj_cond, edge_cond, relation_cond)
+        output4 = self.rgc3(output4a, edge_cond, relation_cond)
         
         # --- Step 6 - Skip connection with a linear layer to fuse the outputs
         output5 = torch.cat((output4, output1), dim=-1)
@@ -251,7 +249,7 @@ class GuidedDiffusionRGC(nn.Module):
             bias=rgc_params["rgc_bias"],
         )
         
-    def forward(self, x, t, obj_cond, edge_cond, relation_cond):
+    def forward(self, x, edge_cond, relation_cond):
         
         B, N, D = x.shape
         

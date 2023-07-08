@@ -31,11 +31,11 @@ class TimeEmbedding(nn.Module):
         super().__init__()
         self.dim = dim
         
-        # Enable odd dim
-        if dim % 2 != 0:
-            dim_1 = dim-1
-        else:
-            dim_1 = dim
+        # TODO: Enable odd dim
+        # if dim % 2 != 0:
+        #     self.dim = dim-1
+        # else:
+        #     self.dim = dim
             
 
     def forward(self, x):
