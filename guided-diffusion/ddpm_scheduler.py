@@ -196,9 +196,6 @@ class DDPMScheduler(nn.Module):
         preds = self.model_predictions(x, t, obj_cond, edge_cond, relation_cond, cond_scale) # preds = ('ModelPrediction', ['pred_noise', 'pred_x_start'])
         x_start = preds.pred_x_start
 
-        if clip_denoised:
-            x_start.clamp_(-1., 1.)
-
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start = x_start, x_t = x, t = t)
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
@@ -466,11 +463,11 @@ class DDPMUtils:
     def normalize_to_neg_one_to_one(data,range_matrix):
         '''
         Args:
-            data: (B, 20, 315)
-            range: (2, 315) --> max, min
+            data: (B, 20, 15)
+            range: (2, 15) --> max, min
 
         Returns:
-            data: (B, 20, 315)
+            data: (B, 20, 15)
         ''' 
         # Shift the data so that the min value is at 0
         shifted_data = data - range_matrix[1]
@@ -487,11 +484,11 @@ class DDPMUtils:
     def unnormalize_to_original(data, range_matrix):
         '''
         Args:
-            data: (B, 20, 315)
-            range: (2, 315) --> max, min
+            data: (B, 20, 15)
+            range: (2, 15) --> max, min
 
         Returns:
-            data: (B, 20, 315)
+            data: (B, 20, 15)
         '''
         # Shift the data so that the min value is at 0
         shifted_data = data + 1

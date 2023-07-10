@@ -12,5 +12,8 @@ datasets/c++/*
 # DVIS visualizer files
 visualization/*
 
+# FID computation files
+fid_data/*
+
 models/*
 */__pycache__
