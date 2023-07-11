@@ -8,6 +8,8 @@ from einops import reduce
 
 from tqdm.auto import tqdm
 
+from diffusion_loss import DiffusionLoss
+
 ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
 
 class DDPMScheduler(nn.Module):
@@ -163,9 +165,6 @@ class DDPMScheduler(nn.Module):
         
 
         if self.objective == 'pred_noise': 
-            # TODO: Not entirely sure about 2 things
-            # 1: whether to perform clipping on pred_noise or x_start
-            # 2: effect of clipping on training
             pred_noise = model_output
             x_start = self.predict_start_from_noise(x, t, pred_noise)
             #x_start = maybe_clip(x_start)
@@ -345,6 +344,10 @@ class DDPMScheduler(nn.Module):
             return F.l1_loss
         elif self.loss_type == 'l2':
             return F.mse_loss
+        elif self.loss_type == 'diffL':
+            # TODO: pass these values dynamically?
+            # return DiffusionLoss(weight_l2=1.0, weight_volume=1.0, weight_aspect=1.0, weight_distance=1.0)
+            return DiffusionLoss()
         else:
             raise ValueError(f'invalid loss type {self.loss_type}')
 
@@ -379,11 +382,16 @@ class DDPMScheduler(nn.Module):
         else:
             raise ValueError(f'unknown objective {self.objective}')
 
-        loss = self.loss_fn(model_out, target, reduction = 'none')
-        loss = reduce(loss, 'b ... -> b (...)', 'mean')
-        loss = loss * DDPMUtils.extract(self.loss_weight, t, loss.shape)
+        if self.loss_type == 'diffL':
+            loss, l2_loss, volume_loss, aspect_loss, location_loss, interdistance_loss = self.loss_fn(model_out, target)
+            return loss, l2_loss, volume_loss, aspect_loss, location_loss, interdistance_loss
+        else:
+            loss = self.loss_fn(model_out, target, reduction = 'none')        
+            
+            loss = reduce(loss, 'b ... -> b (...)', 'mean')
+            loss = loss * DDPMUtils.extract(self.loss_weight, t, loss.shape)
 
-        return loss.mean()
+            return loss.mean()
     
     # tbd image_size
     def forward(self, data, obj_cond, edge_cond, relation_cond, noise=None, *args, **kwargs):

@@ -56,7 +56,6 @@ class GuidedDiffusionNetwork(nn.Module):
             rgc_params=rgc_params
         )
         
-        
         self.linear3 = nn.Linear(
             in_features=2*general_params['layer_2_dim'],
             out_features=general_params['layer_2_dim']
