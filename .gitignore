@@ -15,5 +15,6 @@ visualization/*
 # FID computation files
 fid_data/*
 
+# Model checkpoints
 models/*
 */__pycache__
