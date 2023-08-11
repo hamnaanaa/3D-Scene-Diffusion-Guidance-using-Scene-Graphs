@@ -1,6 +1,6 @@
 # 3D Scene Diffusion Guidance using Scene Graphs
 
-[Paper (tbd)]() | [arXiv (tbd)]()
+[Paper](https://arxiv.org/abs/2308.04468) | [arXiv](https://arxiv.org/abs/2308.04468)
 
 ![Paper Poster](extra/paper_poster.png)
 
@@ -53,9 +53,11 @@ This work is developed with [TUM Visual Computing Group](http://niessnerlab.org)
 ## Citation
 If you find this work useful please cite:
 
-> tbd
-<!-- ```
-@misc{
-    tbd
+@misc{naanaa20233d,
+      title={3D Scene Diffusion Guidance using Scene Graphs}, 
+      author={Mohammad Naanaa and Katharina Schmid and Yinyu Nie},
+      year={2023},
+      eprint={2308.04468},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
 }
-``` -->
