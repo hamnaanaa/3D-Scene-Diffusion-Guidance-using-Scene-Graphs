@@ -53,6 +53,7 @@ This work is developed with [TUM Visual Computing Group](http://niessnerlab.org)
 ## Citation
 If you find this work useful please cite:
 
+```
 @misc{naanaa20233d,
       title={3D Scene Diffusion Guidance using Scene Graphs}, 
       author={Mohammad Naanaa and Katharina Schmid and Yinyu Nie},
@@ -61,3 +62,4 @@ If you find this work useful please cite:
       archivePrefix={arXiv},
       primaryClass={cs.CV}
 }
+```
