@@ -1,3 +1,5 @@
+
+
 # 3D Scene Diffusion Guidance using Scene Graphs
 
 [Paper](https://arxiv.org/abs/2308.04468) | [arXiv](https://arxiv.org/abs/2308.04468)
@@ -30,7 +32,7 @@ conda env create -f environment.yml
 
 ### [Optional] FastText Embeddings by Facebook Research
 We use the [FastText](https://fasttext.cc/) embeddings by Facebook Research to embed the scene objects descriptions in a more robust way than a standard Word2Vec encoder. By using it, we can embed textual description of each object in the scene into a 300-dimensional embedding stored in a node. Combining these nodes with their inter-node relations we generate a scene graph used as input to the denoising network.
-You can download the model binary [here](https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.en.300.bin.gz) and place them in the `models` folder.
+You can download the model binary [here](https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.en.300.bin.gz) and place the extracted file `cc.en.300.bin` in the `models` folder.
 
 ### [Optional] DVIS Library for 3D Scene Visualization
 `guided-diffusion/inference.ipynb` contains a code section on [DVIS library](https://github.com/SirWyver/dvis) usage to visualize the generated scenes in 3D.
